@@ -1,0 +1,40 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isFaculty() {
+      return isSignedIn() && request.auth.token.role == 'faculty';
+    }
+
+    function isActiveStudent() {
+      return isSignedIn() && request.auth.token.role == 'student';
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Max 5 MB, only JPEG/PNG/PDF allowed
+    function isValidProofFile() {
+      return request.resource.size <= 5 * 1024 * 1024
+          && request.resource.contentType.matches(
+               'image/(jpeg|jpg|png)|application/pdf'
+             );
+    }
+
+    // /proofs/{userId}/activities/{uuid}.{ext}
+    // /proofs/{userId}/coding/{uuid}.{ext}
+    match /proofs/{userId}/{entryType}/{fileName} {
+      allow read:   if isOwner(userId) || isFaculty();
+      allow create: if isOwner(userId) && isActiveStudent() && isValidProofFile();
+      allow update: if isOwner(userId) && isActiveStudent() && isValidProofFile();
+      // Faculty can delete proofs when handling rejected entries
+      allow delete: if isFaculty();
+    }
+  }
+}

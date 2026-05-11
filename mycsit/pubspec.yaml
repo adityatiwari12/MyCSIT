@@ -1,0 +1,51 @@
+name: mycsit
+description: MyCSIT — Student Intelligence Platform for CSIT Department, AITR
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # State Management
+  flutter_riverpod: ^2.4.10
+  riverpod_annotation: ^2.3.4
+
+  # Navigation
+  go_router: ^13.0.0
+
+  # Backend
+  supabase_flutter: ^2.5.0
+
+  # File / Image Handling
+  image_picker: ^1.0.7
+  file_picker: ^8.1.7
+  flutter_image_compress: ^2.1.0
+
+  # Networking & Caching
+  cached_network_image: ^3.3.0
+
+  # Utilities
+  uuid: ^4.2.2
+  intl: ^0.19.0
+  url_launcher: ^6.2.4
+
+  # UI
+  cupertino_icons: ^1.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.7
+  riverpod_generator: ^2.3.9
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/icons/

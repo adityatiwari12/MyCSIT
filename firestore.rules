@@ -1,0 +1,115 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ──────────────────────────────────────────────────────
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Faculty custom claim is set during account seeding
+    function isFaculty() {
+      return isSignedIn() && request.auth.token.role == 'faculty';
+    }
+
+    // Student custom claim is set when faculty approves the registration
+    function isActiveStudent() {
+      return isSignedIn() && request.auth.token.role == 'student';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ─── Users Collection ──────────────────────────────────────────────────────
+    // Pending students have no custom claims yet, but must read their own doc
+    // to determine if they're pending or rejected.
+    match /users/{userId} {
+      allow read: if isFaculty() || isOwner(userId);
+
+      // Creation handled exclusively by Cloud Functions (Admin SDK)
+      allow create: if false;
+
+      // Faculty: unrestricted update (status changes, approvals)
+      // Active students: can update own profile fields only
+      //   Prohibited: status, role, scoreCache, rollNumber, createdAt, pendingActivityCount
+      allow update: if isFaculty()
+                    || (isOwner(userId)
+                        && isActiveStudent()
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['status', 'role', 'scoreCache',
+                                      'rollNumber', 'createdAt',
+                                      'pendingActivityCount']));
+
+      allow delete: if false;
+    }
+
+    // ─── Activities Collection ─────────────────────────────────────────────────
+    match /activities/{activityId} {
+      allow read: if isFaculty()
+                  || (isActiveStudent() && resource.data.userId == request.auth.uid);
+
+      allow create: if isActiveStudent()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.isDeleted == false
+                    && request.resource.data.keys().hasAll([
+                         'userId', 'type', 'title', 'description',
+                         'date', 'proofUrl', 'status', 'isDeleted', 'createdAt'
+                       ]);
+
+      // Students may only edit their own rejected entries (resets to pending)
+      // Faculty has unrestricted write access for approvals/rejections
+      allow update: if isFaculty()
+                    || (isActiveStudent()
+                        && resource.data.userId == request.auth.uid
+                        && resource.data.status == 'rejected'
+                        && request.resource.data.status == 'pending'
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['approvedBy', 'isDeleted', 'userId', 'createdAt']));
+
+      allow delete: if false;
+    }
+
+    // ─── Coding Activities Collection ──────────────────────────────────────────
+    match /codingActivities/{activityId} {
+      allow read: if isFaculty()
+                  || (isActiveStudent() && resource.data.userId == request.auth.uid);
+
+      allow create: if isActiveStudent()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.isDeleted == false;
+
+      allow update: if isFaculty()
+                    || (isActiveStudent()
+                        && resource.data.userId == request.auth.uid
+                        && resource.data.status == 'rejected'
+                        && request.resource.data.status == 'pending'
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys()
+                             .hasAny(['approvedBy', 'isDeleted', 'userId', 'createdAt']));
+
+      allow delete: if false;
+    }
+
+    // ─── Academics Subcollection ───────────────────────────────────────────────
+    // Faculty enters marks/CGPA; students can only read.
+    match /academics/{userId}/semesters/{semId} {
+      allow read: if isFaculty() || isOwner(userId);
+      allow write: if isFaculty();
+    }
+
+    // ─── Audit Log ─────────────────────────────────────────────────────────────
+    // Written exclusively by Cloud Functions (Admin SDK bypasses rules).
+    // Faculty can read for compliance; students cannot access.
+    match /auditLog/{logId} {
+      allow read: if isFaculty();
+      allow write: if false;
+    }
+  }
+}
