@@ -61,9 +61,7 @@ npm run dev
 
 ## 🔐 Authentication
 
-### Faculty Login
-- **Email:** `csitfaculty@acropolis.in`
-- **Password:** `123456`
+
 
 ### Student Registration
 - Students register with their email and password
