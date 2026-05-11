@@ -188,11 +188,3 @@ This project is for educational purposes for the CSIT Department at AITR.
 
 - **Faculty Dashboard:** CSIT Faculty
 - **Student App:** CSIT Students
-
-## 📞 Support
-
-For issues or questions, contact the CSIT Department faculty.
-
----
-
-**Built with ❤️ for CSIT Department, AITR**
