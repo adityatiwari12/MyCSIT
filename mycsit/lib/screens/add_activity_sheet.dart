@@ -5,6 +5,7 @@ import 'dart:io';
 import '../providers/mock_auth_provider.dart';
 import '../data/models/activity_model.dart';
 import '../data/repositories/activity_repository.dart';
+import '../core/components/image_preview_gallery.dart';
 
 class AddActivitySheet extends ConsumerStatefulWidget {
   const AddActivitySheet({super.key});
@@ -19,7 +20,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   DateTime? _selectedDate;
-  File? _selectedFile;
+  List<File> _selectedFiles = [];
   bool _isLoading = false;
 
   final List<ActivityType> _activityTypes = [
@@ -186,6 +187,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
           const SizedBox(height: 24),
           TextField(
             controller: _titleController,
+            onChanged: (value) => setState(() {}),
             decoration: const InputDecoration(
               labelText: 'Title',
               border: OutlineInputBorder(),
@@ -216,6 +218,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
           const SizedBox(height: 16),
           TextField(
             controller: _descriptionController,
+            onChanged: (value) => setState(() {}),
             maxLines: 3,
             decoration: const InputDecoration(
               labelText: 'Description',
@@ -241,48 +244,14 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
             ),
           ),
           const SizedBox(height: 24),
-          GestureDetector(
-            onTap: _pickFile,
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: const Color(0xFFFF6B35),
-                  width: 2,
-                  style: BorderStyle.solid,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                color: const Color(0xFFFF6B35).withOpacity(0.05),
-              ),
-              child: _selectedFile != null
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green, size: 32),
-                        const SizedBox(height: 8),
-                        Text(
-                          _selectedFile!.path.split('/').last,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          '${(_selectedFile!.lengthSync() / 1024).toStringAsFixed(1)} KB',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    )
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.upload_file, color: Color(0xFFFF6B35), size: 32),
-                        SizedBox(height: 8),
-                        Text(
-                          'Tap to select PDF or image',
-                          style: TextStyle(color: Color(0xFFFF6B35)),
-                        ),
-                      ],
-                    ),
-            ),
+          ImagePreviewGallery(
+            files: _selectedFiles,
+            onAddMore: _pickFiles,
+            onRemove: (index) {
+              setState(() {
+                _selectedFiles.removeAt(index);
+              });
+            },
           ),
         ],
       ),
@@ -333,7 +302,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
       case 1:
         return _titleController.text.isNotEmpty && _selectedDate != null;
       case 2:
-        return _selectedFile != null;
+        return _selectedFiles.isNotEmpty;
       default:
         return false;
     }
@@ -346,7 +315,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
   }
 
   Future<void> _submitActivity(String userId) async {
-    if (_selectedType == null || _selectedDate == null || _selectedFile == null) {
+    if (_selectedType == null || _selectedDate == null || _selectedFiles.isEmpty) {
       return;
     }
 
@@ -355,8 +324,8 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
     });
 
     try {
-      // Upload proof
-      final proofUrl = await ActivityRepository.uploadProof(_selectedFile!, userId, 'temp');
+      // Upload proofs
+      final proofUrls = await ActivityRepository.uploadProofs(_selectedFiles, userId, 'temp');
 
       // Create activity
       final activity = ActivityModel(
@@ -365,7 +334,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         date: _selectedDate!,
-        proofUrl: proofUrl,
+        proofUrls: proofUrls,
       );
 
       // Save to database
@@ -407,16 +376,17 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
     }
   }
 
-  Future<void> _pickFile() async {
+  Future<void> _pickFiles() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        allowMultiple: true,
       );
       
       if (result != null && result.files.isNotEmpty) {
         setState(() {
-          _selectedFile = File(result.files.first.path!);
+          _selectedFiles.addAll(result.files.map((e) => File(e.path!)));
         });
       }
     } catch (e) {

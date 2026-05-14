@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme/app_theme.dart';
+import '../core/theme/app_theme.dart';
 import '../core/components/premium_card.dart';
+import 'add_activity_sheet.dart';
+import 'add_coding_sheet.dart';
 
 class PremiumAddEntryScreen extends StatelessWidget {
   const PremiumAddEntryScreen({super.key});
@@ -47,7 +50,12 @@ class PremiumAddEntryScreen extends StatelessWidget {
                       Icons.event,
                       AppTheme.info,
                       () {
-                        Navigator.pushNamed(context, '/add-activity');
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => const AddActivitySheet(),
+                        );
                       },
                     ),
                     
@@ -61,7 +69,12 @@ class PremiumAddEntryScreen extends StatelessWidget {
                       Icons.code,
                       AppTheme.success,
                       () {
-                        Navigator.pushNamed(context, '/add-coding');
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (context) => const AddCodingSheet(),
+                        );
                       },
                     ),
                     
@@ -75,7 +88,8 @@ class PremiumAddEntryScreen extends StatelessWidget {
                       Icons.school,
                       AppTheme.warning,
                       () {
-                        Navigator.pushNamed(context, '/add-academic');
+                        // Keep academic route as is for now or use sheet
+                        // Navigator.pushNamed(context, '/add-academic');
                       },
                     ),
                     

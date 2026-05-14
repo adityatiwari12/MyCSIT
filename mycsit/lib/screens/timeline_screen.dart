@@ -4,6 +4,7 @@ import '../providers/mock_auth_provider.dart';
 import '../data/database/local_database.dart';
 import '../data/models/activity_model.dart';
 import '../data/models/coding_activity_model.dart';
+import 'package:go_router/go_router.dart';
 import '../screens/functional_activity_detail_screen.dart';
 import '../screens/coding_activity_detail_screen.dart';
 
@@ -208,10 +209,7 @@ class _TimelineScreenState extends ConsumerState<TimelineScreen> {
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: () {
-              // Navigate to add entry
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Add entry feature coming soon!')),
-              );
+              context.go('/add-entry');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFF6B35),

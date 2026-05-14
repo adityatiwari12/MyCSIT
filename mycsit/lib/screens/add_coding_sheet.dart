@@ -5,6 +5,7 @@ import 'dart:io';
 import '../providers/mock_auth_provider.dart';
 import '../data/models/coding_activity_model.dart';
 import '../data/repositories/coding_repository.dart';
+import '../core/components/image_preview_gallery.dart';
 
 class AddCodingSheet extends ConsumerStatefulWidget {
   const AddCodingSheet({super.key});
@@ -21,7 +22,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
   final _contestNameController = TextEditingController();
   final _valueController = TextEditingController();
   String? _selectedDifficulty;
-  File? _selectedFile;
+  List<File> _selectedFiles = [];
   bool _isLoading = false;
 
   final List<CodingType> _codingTypes = [
@@ -264,6 +265,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
             TextField(
               controller: _valueController,
               keyboardType: TextInputType.number,
+              onChanged: (value) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Problems Solved',
                 hintText: 'Enter a round number like 50, 100, 200...',
@@ -292,6 +294,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
           ] else if (_selectedType == CodingType.contest) ...[
             TextField(
               controller: _contestNameController,
+              onChanged: (value) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Contest Name',
                 border: OutlineInputBorder(),
@@ -301,6 +304,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
             TextField(
               controller: _valueController,
               keyboardType: TextInputType.number,
+              onChanged: (value) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Your Rank',
                 border: OutlineInputBorder(),
@@ -309,6 +313,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
           ] else if (_selectedType == CodingType.highValueProblem) ...[
             TextField(
               controller: _titleController,
+              onChanged: (value) => setState(() {}),
               decoration: const InputDecoration(
                 labelText: 'Problem Name',
                 border: OutlineInputBorder(),
@@ -353,48 +358,14 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
             ),
           ),
           const SizedBox(height: 24),
-          GestureDetector(
-            onTap: _pickFile,
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: const Color(0xFFFF6B35),
-                  width: 2,
-                  style: BorderStyle.solid,
-                ),
-                borderRadius: BorderRadius.circular(16),
-                color: const Color(0xFFFF6B35).withOpacity(0.05),
-              ),
-              child: _selectedFile != null
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green, size: 32),
-                        const SizedBox(height: 8),
-                        Text(
-                          _selectedFile!.path.split('/').last,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                          textAlign: TextAlign.center,
-                        ),
-                        Text(
-                          '${(_selectedFile!.lengthSync() / 1024).toStringAsFixed(1)} KB',
-                          style: const TextStyle(color: Colors.grey),
-                        ),
-                      ],
-                    )
-                  : const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.upload_file, color: Color(0xFFFF6B35), size: 32),
-                        SizedBox(height: 8),
-                        Text(
-                          'Tap to select PDF or image',
-                          style: TextStyle(color: Color(0xFFFF6B35)),
-                        ),
-                      ],
-                    ),
-            ),
+          ImagePreviewGallery(
+            files: _selectedFiles,
+            onAddMore: _pickFiles,
+            onRemove: (index) {
+              setState(() {
+                _selectedFiles.removeAt(index);
+              });
+            },
           ),
         ],
       ),
@@ -454,7 +425,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
         }
         return false;
       case 3:
-        return _selectedFile != null;
+        return _selectedFiles.isNotEmpty;
       default:
         return false;
     }
@@ -480,7 +451,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
 
     try {
       // Upload proof
-      final proofUrl = await CodingRepository.uploadProof(_selectedFile!, userId, 'temp');
+      final proofUrls = await CodingRepository.uploadProofs(_selectedFiles, userId, 'temp');
 
       // Create coding activity
       final activity = CodingActivityModel(
@@ -491,7 +462,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
         value: int.tryParse(_valueController.text),
         contestName: _contestNameController.text.trim().isEmpty ? null : _contestNameController.text.trim(),
         difficulty: _selectedDifficulty,
-        proofUrl: proofUrl,
+        proofUrls: proofUrls,
       );
 
       // Save to database
@@ -529,16 +500,17 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
     }
   }
 
-  Future<void> _pickFile() async {
+  Future<void> _pickFiles() async {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+        allowMultiple: true,
       );
       
       if (result != null && result.files.isNotEmpty) {
         setState(() {
-          _selectedFile = File(result.files.first.path!);
+          _selectedFiles.addAll(result.files.map((e) => File(e.path!)));
         });
       }
     } catch (e) {
