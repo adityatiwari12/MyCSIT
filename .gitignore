@@ -14,6 +14,7 @@ mycsit/build/
 mycsit/ios/.symlinks/
 mycsit/ios/Pods/
 mycsit/ios/.generated/
+mycsit/android/.gradle/
 
 # React/Node
 mycsit-faculty/node_modules/

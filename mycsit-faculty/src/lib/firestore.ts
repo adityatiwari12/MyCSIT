@@ -82,7 +82,7 @@ export async function getPendingStudents(): Promise<Student[]> {
     .from('users')
     .select('*')
     .eq('role', 'student')
-    .eq('status', 'pending')
+    .eq('status', 'active')  // Changed to active since we removed approval
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => rowToStudent(r as Record<string, unknown>));

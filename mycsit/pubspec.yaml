@@ -20,10 +20,15 @@ dependencies:
   # Backend
   supabase_flutter: ^2.5.0
 
+  # Local Database
+  sqflite: ^2.3.0
+  path: ^1.8.3
+
   # File / Image Handling
   image_picker: ^1.0.7
   file_picker: ^8.1.7
   flutter_image_compress: ^2.1.0
+  permission_handler: ^11.3.0
 
   # Networking & Caching
   cached_network_image: ^3.3.0
@@ -34,7 +39,17 @@ dependencies:
   url_launcher: ^6.2.4
 
   # UI
-  cupertino_icons: ^1.0.5
+  cupertino_icons: 1.0.5
+  flutter_animate: ^4.5.0
+  flutter_svg: ^2.0.9
+  fl_chart: ^0.66.0
+  shimmer: ^3.0.0
+  google_fonts: ^6.1.0
+  percent_indicator: ^4.2.3
+  table_calendar: ^3.0.9
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  path_provider: ^2.1.5
 
 dev_dependencies:
   flutter_test:

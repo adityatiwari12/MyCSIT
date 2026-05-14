@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'core/config/supabase_config.dart';
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'data/database/hive_database.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Supabase.initialize(
-    url: SupabaseConfig.url,
-    anonKey: SupabaseConfig.anonKey,
-  );
+  await HiveDatabase.init();
 
   runApp(
     const ProviderScope(

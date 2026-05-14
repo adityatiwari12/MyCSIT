@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../providers/auth_provider.dart';
+import '../providers/mock_auth_provider.dart';
+import '../services/mock_auth_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -25,22 +26,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   Future<void> _handleLogin() async {
-    if (!_formKey.currentState!.validate()) return;
+    print('LoginScreen: Login button clicked');
+    print('LoginScreen: Roll number: ${_emailController.text.trim()}');
+    print('LoginScreen: Password: ${_passwordController.text}');
+    
+    if (!_formKey.currentState!.validate()) {
+      print('LoginScreen: Form validation failed');
+      return;
+    }
+    
+    print('LoginScreen: Form validation passed, starting login');
     setState(() => _isLoading = true);
     try {
-      await ref.read(authServiceProvider).signIn(
+      await MockAuthService.signIn(
             _emailController.text.trim(),
             _passwordController.text,
           );
+      print('LoginScreen: Login successful');
       // Router will redirect based on user status after auth state changes
     } catch (e) {
+      print('LoginScreen: Login failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(_friendlyError(e.toString()))),
         );
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        print('LoginScreen: Setting loading to false');
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -54,6 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    print('LoginScreen: Building login screen');
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -71,19 +87,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Sign in with your email',
+                  'Sign in with your roll number',
                   style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
                 ),
                 const SizedBox(height: 40),
                 TextFormField(
                   controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
+                  keyboardType: TextInputType.text,
                   decoration: const InputDecoration(
-                    labelText: 'Email',
-                    hintText: 'e.g. student@example.com',
-                    prefixIcon: Icon(Icons.email_outlined),
+                    labelText: 'Roll Number',
+                    hintText: 'e.g. 0101CS221001',
+                    prefixIcon: Icon(Icons.badge_outlined),
                   ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your email' : null,
+                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your roll number' : null,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(

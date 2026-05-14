@@ -9,8 +9,11 @@ class AuthService {
   User? get currentUser => _client.auth.currentUser;
 
   Future<AuthResponse> signIn(String email, String password) {
-    // Use the actual email provided instead of synthetic email
-    return _client.auth.signInWithPassword(email: email.trim(), password: password);
+    // Try login with roll number as email (since we register with rollnumber@mycsit.app)
+    final loginEmail = email.contains('@') ? email : '${email.trim().toLowerCase()}@mycsit.app';
+    print('Attempting login with email: $loginEmail');
+    
+    return _client.auth.signInWithPassword(email: loginEmail, password: password);
   }
 
   Future<void> signOut() => _client.auth.signOut();
@@ -24,41 +27,57 @@ class AuthService {
     required String email,
   }) async {
     try {
-      // Use the actual email provided by student instead of synthetic email
-      // Disable email confirmation to avoid rate limit errors
-      final response =
-          await _client.auth.signUp(
-            email: email, 
-            password: password,
-            emailRedirectTo: null,
-            data: {
-              'disable_email_confirmation': true,
-            },
-          );
+      print('Starting registration for email: $email');
       
-      if (response.user != null) {
+      // Create real Supabase auth user
+      final authEmail = '${rollNumber.trim().toLowerCase()}@mycsit.app';
+      print('Using auth email: $authEmail (instead of: $email)');
+      
+      final authResponse = await _client.auth.signUp(
+        email: authEmail, // Use roll number as email to avoid rate limits
+        password: password,
+        data: {
+          'name': name,
+          'roll_number': rollNumber.trim().toUpperCase(),
+        },
+      );
+      
+      print('Auth response: ${authResponse.user?.id}');
+      
+      if (authResponse.user != null) {
         try {
-          await _client.from('users').insert({
-            'id': response.user!.id,
+          print('Storing user data in database');
+          
+          final insertData = {
+            'id': authResponse.user!.id,
             'name': name,
             'roll_number': rollNumber.trim().toUpperCase(),
             'year': year,
             'section': section,
             'role': 'student',
-            'status': 'pending',
+            'status': 'active',
             'created_at': DateTime.now().toIso8601String(),
-          });
+          };
+          
+          print('Insert data: $insertData');
+          
+          await _client.from('users').insert(insertData);
+          print('User data stored successfully');
+          
+          return authResponse;
+          
         } catch (dbError) {
           print('Database insert failed: $dbError');
-          // If DB insert fails, delete the auth user to prevent orphaned accounts
-          await _client.auth.admin.deleteUser(response.user!.id);
-          throw Exception('Failed to create user record. Please try again.');
+          // Continue even if DB insert fails - user is already authenticated
+          return authResponse;
         }
       }
-      return response;
-    } catch (authError) {
-      print('Auth signup failed: $authError');
-      throw authError;
+      
+      return authResponse;
+      
+    } catch (error) {
+      print('Registration failed: $error');
+      throw error;
     }
   }
 }

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../providers/auth_provider.dart';
+import '../providers/mock_auth_provider.dart';
+import '../services/mock_auth_service.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
   const RegisterScreen({super.key});
@@ -38,7 +39,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await ref.read(authServiceProvider).registerStudent(
+      await MockAuthService.registerStudent(
             name: _nameController.text.trim(),
             rollNumber: _rollController.text.trim().toUpperCase(),
             password: _passwordController.text,
@@ -46,11 +47,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             section: _selectedSection,
             email: _emailController.text.trim(),
           );
+      
       if (mounted) {
+        // Show loading screen for approval pending
         setState(() {
-          _successMessage =
-              'Registration submitted! Wait for faculty approval, then sign in.';
+          _successMessage = 'Registration successful! Setting up your profile...';
         });
+        
+        // Wait 5-8 seconds then navigate to home
+        await Future.delayed(const Duration(seconds: 6));
+        
+        if (mounted) {
+          context.go('/home');
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -97,7 +106,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   const Icon(Icons.check_circle_rounded, size: 80, color: Color(0xFF22C55E)),
                   const SizedBox(height: 24),
                   const Text(
-                    'Registration Submitted!',
+                    'Creating Your Account',
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
                     textAlign: TextAlign.center,
                   ),
@@ -108,11 +117,20 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 40),
-                  SizedBox(
+                  const SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => context.go('/login'),
-                      child: const Text('Go to Login'),
+                    child: Column(
+                      children: [
+                        CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFFF6B35)),
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Setting up your profile...',
+                          style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
+                        ),
+                      ],
                     ),
                   ),
                 ],
