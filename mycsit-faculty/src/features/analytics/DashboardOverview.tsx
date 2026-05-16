@@ -73,11 +73,11 @@ export function DashboardOverview() {
   });
 
   const activityPie = [
-    { name: 'With Activities', value: students.filter((s) => (s.activityCount ?? 0) > 0).length },
-    { name: 'No Activities', value: students.filter((s) => (s.activityCount ?? 0) === 0).length },
+    { name: 'Has Score', value: students.filter((s) => (s.totalScore ?? 0) > 0).length },
+    { name: 'No Score Yet', value: students.filter((s) => (s.totalScore ?? 0) === 0).length },
   ];
 
-  const atRisk = students.filter((s) => (s.activityCount ?? 0) === 0).slice(0, 5);
+  const atRisk = students.filter((s) => (s.totalScore ?? 0) === 0).slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -149,7 +149,7 @@ export function DashboardOverview() {
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-error" />
               <h3 className="font-display font-semibold text-base text-text-primary">
-                Students with 0 Activities
+                Students with No Score Yet
               </h3>
             </div>
             <button

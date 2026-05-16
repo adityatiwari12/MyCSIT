@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Eye, Check, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../lib/supabase';
 import {
   getPendingStudents,
   getPendingActivities,
@@ -29,6 +30,7 @@ export function ApprovalsPage() {
   const [rejectReason, setRejectReason] = useState('');
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -54,7 +56,29 @@ export function ApprovalsPage() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => {
+    loadData();
+
+    // Realtime: refresh whenever pending items change
+    channelRef.current = supabase
+      .channel('approvals-realtime')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'activities',
+      }, loadData)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'coding_activities',
+      }, loadData)
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'users',
+      }, loadData)
+      .subscribe();
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
+    };
+  }, []);
 
   const tabs = [
     { id: 'registrations' as Tab, label: 'Student Registrations', count: students.length },

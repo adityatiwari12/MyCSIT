@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import '../core/theme/app_theme.dart';
-import '../core/theme/app_theme.dart';
 import '../core/components/premium_card.dart';
 import 'add_activity_sheet.dart';
 import 'add_coding_sheet.dart';

@@ -1,11 +1,13 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import '../providers/mock_auth_provider.dart';
+import '../core/theme/app_theme.dart';
+import '../core/components/image_preview_gallery.dart';
 import '../data/models/coding_activity_model.dart';
 import '../data/repositories/coding_repository.dart';
-import '../core/components/image_preview_gallery.dart';
+import '../providers/auth_provider.dart';
+import '../providers/supabase_providers.dart';
 
 class AddCodingSheet extends ConsumerStatefulWidget {
   const AddCodingSheet({super.key});
@@ -25,14 +27,8 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
   List<File> _selectedFiles = [];
   bool _isLoading = false;
 
-  final List<CodingType> _codingTypes = [
-    CodingType.milestone,
-    CodingType.contest,
-    CodingType.highValueProblem,
-  ];
-
-  final List<String> _platforms = ['LeetCode', 'Codeforces', 'CodeChef', 'Other'];
-  final List<String> _difficulties = ['Easy', 'Medium', 'Hard'];
+  static const _platforms = ['LeetCode', 'Codeforces', 'CodeChef', 'Other'];
+  static const _difficulties = ['Easy', 'Medium', 'Hard'];
 
   @override
   void dispose() {
@@ -44,54 +40,86 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(mockCurrentUserProvider);
-    
-    if (user == null) {
-      return const SizedBox.shrink();
-    }
+    final uid = ref.watch(currentUidProvider);
+    if (uid == null) return const SizedBox.shrink();
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(AppTheme.radiusLg),
+          topRight: Radius.circular(AppTheme.radiusLg),
         ),
       ),
       child: Column(
         children: [
+          _buildHandle(),
           _buildHeader(),
-          Expanded(
-            child: _buildCurrentStep(),
-          ),
-          _buildNavigationButtons(user.id),
+          _buildStepIndicator(),
+          Expanded(child: _buildCurrentStep()),
+          _buildNavigationButtons(uid),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHandle() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey, width: 0.2)),
+      margin: const EdgeInsets.only(top: AppTheme.spacingSm),
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: AppTheme.border,
+        borderRadius: BorderRadius.circular(AppTheme.radiusFull),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
       child: Row(
         children: [
+          Expanded(
+            child: Text(
+              'Add Coding Activity',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          const SizedBox(width: 16),
-          Text(
-            'Add Coding Activity - Step ${_currentStep + 1}/4',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+      child: Row(
+        children: List.generate(4, (i) {
+          final isActive = i == _currentStep;
+          final isDone = i < _currentStep;
+          return Expanded(
+            child: Container(
+              margin: EdgeInsets.only(right: i < 3 ? AppTheme.spacingXs : 0),
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDone || isActive
+                    ? AppTheme.primaryAccent
+                    : AppTheme.border,
+                borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -112,53 +140,73 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
   }
 
   Widget _buildStep1() {
+    final types = CodingType.values;
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Select Type',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          Text(
+            'Select type',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 24),
-          ..._codingTypes.map((type) {
+          const SizedBox(height: AppTheme.spacingMd),
+          ...types.map((type) {
             final isSelected = _selectedType == type;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
+            return Padding(
+              padding: const EdgeInsets.only(bottom: AppTheme.spacingSm),
               child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedType = type;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
+                onTap: () => setState(() => _selectedType = type),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.all(AppTheme.spacingMd),
                   decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primaryAccent.withOpacity(0.08)
+                        : AppTheme.background,
                     border: Border.all(
-                      color: isSelected ? const Color(0xFFFF6B35) : Colors.grey,
+                      color:
+                          isSelected ? AppTheme.primaryAccent : AppTheme.border,
                       width: isSelected ? 2 : 1,
                     ),
-                    borderRadius: BorderRadius.circular(12),
-                    color: isSelected ? const Color(0xFFFF6B35).withOpacity(0.1) : Colors.white,
+                    borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                   ),
                   child: Row(
                     children: [
                       Icon(
-                        _getCodingIcon(type),
-                        color: isSelected ? const Color(0xFFFF6B35) : Colors.grey,
-                        size: 24,
+                        _typeIcon(type),
+                        color: isSelected
+                            ? AppTheme.primaryAccent
+                            : AppTheme.textMuted,
                       ),
-                      const SizedBox(width: 16),
-                      Text(
-                        _getCodingTitle(type),
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isSelected ? const Color(0xFFFF6B35) : Colors.black,
+                      const SizedBox(width: AppTheme.spacingMd),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _typeName(type),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: isSelected
+                                        ? AppTheme.primaryAccent
+                                        : AppTheme.textPrimary,
+                                  ),
+                            ),
+                            Text(
+                              _typeDesc(type),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(color: AppTheme.textMuted),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -166,7 +214,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
                 ),
               ),
             );
-          }).toList(),
+          }),
         ],
       ),
     );
@@ -174,69 +222,47 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
 
   Widget _buildStep2() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Select Platform',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          Text(
+            'Select platform',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppTheme.spacingMd),
           Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: _platforms.map((platform) {
-              final isSelected = _selectedPlatform == platform;
+            spacing: AppTheme.spacingSm,
+            runSpacing: AppTheme.spacingSm,
+            children: _platforms.map((p) {
+              final isSelected = _selectedPlatform == p;
               return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _selectedPlatform = platform;
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                onTap: () => setState(() => _selectedPlatform = p),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppTheme.spacingMd,
+                      vertical: AppTheme.spacingSm),
                   decoration: BoxDecoration(
+                    color: isSelected
+                        ? AppTheme.primaryAccent
+                        : AppTheme.background,
                     border: Border.all(
-                      color: isSelected ? const Color(0xFFFF6B35) : Colors.grey,
-                      width: isSelected ? 2 : 1,
+                      color:
+                          isSelected ? AppTheme.primaryAccent : AppTheme.border,
                     ),
-                    borderRadius: BorderRadius.circular(20),
-                    color: isSelected ? const Color(0xFFFF6B35) : Colors.white,
+                    borderRadius:
+                        BorderRadius.circular(AppTheme.radiusFull),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: _getPlatformColor(platform),
-                          borderRadius: BorderRadius.circular(12),
+                  child: Text(
+                    p,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: isSelected ? Colors.white : AppTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
                         ),
-                        child: Center(
-                          child: Text(
-                            platform[0],
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        platform,
-                        style: TextStyle(
-                          color: isSelected ? Colors.white : Colors.black,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
                   ),
                 ),
               );
@@ -248,95 +274,76 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
   }
 
   Widget _buildStep3() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Details',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppTheme.spacingMd),
           if (_selectedType == CodingType.milestone) ...[
             TextField(
               controller: _valueController,
               keyboardType: TextInputType.number,
-              onChanged: (value) => setState(() {}),
+              onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
-                labelText: 'Problems Solved',
-                hintText: 'Enter a round number like 50, 100, 200...',
-                border: OutlineInputBorder(),
+                labelText: 'Problems Solved *',
+                hintText: 'e.g. 50, 100, 200, 500',
               ),
             ),
-            const SizedBox(height: 8),
-            if (_valueController.text.isNotEmpty && !_isRoundNumber())
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.warning, color: Colors.orange, size: 16),
-                    SizedBox(width: 8),
-                    Text(
-                      'Milestones are typically round numbers',
-                      style: TextStyle(color: Colors.orange, fontSize: 12),
-                    ),
-                  ],
-                ),
+            if (_valueController.text.isNotEmpty && !_isRoundNumber()) ...[
+              const SizedBox(height: AppTheme.spacingXs),
+              Row(
+                children: [
+                  const Icon(Icons.info_outline,
+                      color: AppTheme.warning, size: 14),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Milestones are typically round numbers (50, 100, 200…)',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: AppTheme.warning),
+                  ),
+                ],
               ),
+            ],
           ] else if (_selectedType == CodingType.contest) ...[
             TextField(
               controller: _contestNameController,
-              onChanged: (value) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Contest Name',
-                border: OutlineInputBorder(),
-              ),
+              onChanged: (_) => setState(() {}),
+              decoration:
+                  const InputDecoration(labelText: 'Contest Name *'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppTheme.spacingMd),
             TextField(
               controller: _valueController,
               keyboardType: TextInputType.number,
-              onChanged: (value) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Your Rank',
-                border: OutlineInputBorder(),
-              ),
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(labelText: 'Your Rank *'),
             ),
           ] else if (_selectedType == CodingType.highValueProblem) ...[
             TextField(
               controller: _titleController,
-              onChanged: (value) => setState(() {}),
-              decoration: const InputDecoration(
-                labelText: 'Problem Name',
-                border: OutlineInputBorder(),
-              ),
+              onChanged: (_) => setState(() {}),
+              decoration:
+                  const InputDecoration(labelText: 'Problem Name *'),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: AppTheme.spacingMd),
             DropdownButtonFormField<String>(
               value: _selectedDifficulty,
-              decoration: const InputDecoration(
-                labelText: 'Difficulty',
-                border: OutlineInputBorder(),
-              ),
-              items: _difficulties.map((difficulty) {
-                return DropdownMenuItem(
-                  value: difficulty,
-                  child: Text(difficulty),
-                );
-              }).toList(),
-              onChanged: (value) {
-                setState(() {
-                  _selectedDifficulty = value;
-                });
-              },
+              decoration:
+                  const InputDecoration(labelText: 'Difficulty *'),
+              items: _difficulties
+                  .map((d) => DropdownMenuItem(value: d, child: Text(d)))
+                  .toList(),
+              onChanged: (v) => setState(() => _selectedDifficulty = v),
             ),
           ],
         ],
@@ -346,26 +353,44 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
 
   Widget _buildStep4() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Upload Proof',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Text(
+                'Upload Proof',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: AppTheme.spacingSm),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spacingXs, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.textMuted.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                ),
+                child: Text(
+                  'optional',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: AppTheme.textMuted),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          ImagePreviewGallery(
-            files: _selectedFiles,
-            onAddMore: _pickFiles,
-            onRemove: (index) {
-              setState(() {
-                _selectedFiles.removeAt(index);
-              });
-            },
+          const SizedBox(height: AppTheme.spacingMd),
+          Expanded(
+            child: ImagePreviewGallery(
+              files: _selectedFiles,
+              onAddMore: _pickFiles,
+              onRemove: (i) => setState(() => _selectedFiles.removeAt(i)),
+            ),
           ),
         ],
       ),
@@ -374,33 +399,36 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
 
   Widget _buildNavigationButtons(String userId) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey, width: 0.2)),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       child: Row(
         children: [
-          if (_currentStep > 0)
+          if (_currentStep > 0) ...[
             Expanded(
               child: OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _currentStep--;
-                  });
-                },
-                child: const Text('Previous'),
+                onPressed: () => setState(() => _currentStep--),
+                child: const Text('Back'),
               ),
             ),
-          if (_currentStep > 0) const SizedBox(width: 16),
+            const SizedBox(width: AppTheme.spacingMd),
+          ],
           Expanded(
             child: ElevatedButton(
-              onPressed: _canProceed() ? () => _currentStep < 3 ? _nextStep() : _submitCodingActivity(userId) : null,
+              onPressed: _canProceed() ? () => _onNext(userId) : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B35),
+                backgroundColor: AppTheme.primaryAccent,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    vertical: AppTheme.spacingMd),
               ),
               child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : Text(_currentStep < 3 ? 'Next' : 'Submit'),
             ),
           ),
@@ -410,6 +438,7 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
   }
 
   bool _canProceed() {
+    if (_isLoading) return false;
     switch (_currentStep) {
       case 0:
         return _selectedType != null;
@@ -419,84 +448,30 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
         if (_selectedType == CodingType.milestone) {
           return _valueController.text.isNotEmpty;
         } else if (_selectedType == CodingType.contest) {
-          return _contestNameController.text.isNotEmpty && _valueController.text.isNotEmpty;
-        } else if (_selectedType == CodingType.highValueProblem) {
-          return _titleController.text.isNotEmpty && _selectedDifficulty != null;
+          return _contestNameController.text.isNotEmpty &&
+              _valueController.text.isNotEmpty;
+        } else {
+          return _titleController.text.isNotEmpty &&
+              _selectedDifficulty != null;
         }
-        return false;
       case 3:
-        return _selectedFiles.isNotEmpty;
+        return true; // proof is optional
       default:
         return false;
     }
   }
 
   bool _isRoundNumber() {
-    if (_valueController.text.isEmpty) return true;
-    final value = int.tryParse(_valueController.text);
-    if (value == null) return true;
-    return value % 50 == 0;
+    final v = int.tryParse(_valueController.text);
+    if (v == null) return true;
+    return v % 50 == 0;
   }
 
-  void _nextStep() {
-    setState(() {
-      _currentStep++;
-    });
-  }
-
-  Future<void> _submitCodingActivity(String userId) async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Upload proof
-      final proofUrls = await CodingRepository.uploadProofs(_selectedFiles, userId, 'temp');
-
-      // Create coding activity
-      final activity = CodingActivityModel(
-        userId: userId,
-        platform: _selectedPlatform!,
-        type: _selectedType!,
-        title: _getTitle(),
-        value: int.tryParse(_valueController.text),
-        contestName: _contestNameController.text.trim().isEmpty ? null : _contestNameController.text.trim(),
-        difficulty: _selectedDifficulty,
-        proofUrls: proofUrls,
-      );
-
-      // Save to database
-      await CodingRepository.addCodingActivity(activity);
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Coding activity added successfully!')),
-        );
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  String _getTitle() {
-    if (_selectedType == CodingType.highValueProblem) {
-      return _titleController.text.trim();
-    } else if (_selectedType == CodingType.contest) {
-      return _contestNameController.text.trim();
+  void _onNext(String userId) {
+    if (_currentStep < 3) {
+      setState(() => _currentStep++);
     } else {
-      return '${_valueController.text.trim()} Problems Solved';
+      _submitCodingActivity(userId);
     }
   }
 
@@ -507,41 +482,101 @@ class _AddCodingSheetState extends ConsumerState<AddCodingSheet> {
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
         allowMultiple: true,
       );
-      
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files.map((e) => File(e.path!)));
-        });
+        setState(
+            () => _selectedFiles.addAll(result.files.map((e) => File(e.path!))));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking file: $e')),
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
+
+  Future<void> _submitCodingActivity(String userId) async {
+    setState(() => _isLoading = true);
+    try {
+      List<String> proofUrls = [];
+      String? proofUrl;
+
+      if (_selectedFiles.isNotEmpty) {
+        proofUrls =
+            await CodingRepository.uploadProofs(_selectedFiles, userId, 'new');
+        if (proofUrls.isNotEmpty) proofUrl = proofUrls.first;
+      }
+
+      final title = _selectedType == CodingType.highValueProblem
+          ? _titleController.text.trim()
+          : _selectedType == CodingType.contest
+              ? _contestNameController.text.trim()
+              : '${_valueController.text.trim()} Problems Solved';
+
+      final activity = CodingActivityModel(
+        userId: userId,
+        platform: _selectedPlatform!,
+        type: _selectedType!,
+        title: title,
+        value: int.tryParse(_valueController.text),
+        contestName: _contestNameController.text.trim().isEmpty
+            ? null
+            : _contestNameController.text.trim(),
+        difficulty: _selectedDifficulty,
+        proofUrl: proofUrl,
+        proofUrls: proofUrls.length > 1 ? proofUrls.sublist(1) : null,
       );
+
+      await CodingRepository.addCodingActivity(activity);
+      ref.invalidate(codingActivitiesProvider(userId));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Coding activity submitted for approval.'),
+              backgroundColor: AppTheme.success),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  IconData _getCodingIcon(CodingType type) {
+  IconData _typeIcon(CodingType type) {
     switch (type) {
-      case CodingType.milestone: return Icons.flag;
-      case CodingType.contest: return Icons.emoji_events;
-      case CodingType.highValueProblem: return Icons.code;
+      case CodingType.milestone:
+        return Icons.flag_outlined;
+      case CodingType.contest:
+        return Icons.emoji_events_outlined;
+      case CodingType.highValueProblem:
+        return Icons.code;
     }
   }
 
-  String _getCodingTitle(CodingType type) {
+  String _typeName(CodingType type) {
     switch (type) {
-      case CodingType.milestone: return 'Milestone';
-      case CodingType.contest: return 'Contest';
-      case CodingType.highValueProblem: return 'Notable Problem';
+      case CodingType.milestone:
+        return 'Milestone';
+      case CodingType.contest:
+        return 'Contest';
+      case CodingType.highValueProblem:
+        return 'Notable Problem';
     }
   }
 
-  Color _getPlatformColor(String platform) {
-    switch (platform) {
-      case 'LeetCode': return Colors.yellow;
-      case 'Codeforces': return Colors.blue;
-      case 'CodeChef': return Colors.brown;
-      default: return Colors.grey;
+  String _typeDesc(CodingType type) {
+    switch (type) {
+      case CodingType.milestone:
+        return '50, 100, 200, 500 problems solved';
+      case CodingType.contest:
+        return 'Competitive programming rank';
+      case CodingType.highValueProblem:
+        return 'Hard/noteworthy problem solved';
     }
   }
 }

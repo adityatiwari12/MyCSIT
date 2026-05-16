@@ -10,6 +10,7 @@ import { ApprovalsPage } from './features/approvals/ApprovalsPage';
 import { MarksPage } from './features/marks/MarksPage';
 import { AttendancePage } from './features/attendance/AttendancePage';
 import { AnalyticsPage } from './features/analytics/AnalyticsPage';
+import { LeaderboardPage } from './features/leaderboard/LeaderboardPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, isLoading } = useAuthStore();
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="marks" element={<MarksPage />} />
           <Route path="attendance" element={<AttendancePage />} />
           <Route path="analytics" element={<AnalyticsPage />} />
+          <Route path="leaderboard" element={<LeaderboardPage />} />
         </Route>
 
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -1,100 +1,149 @@
-import 'dart:convert';
-import 'package:uuid/uuid.dart';
-
 class ProfileModel {
-  final String id;
   final String userId;
-  final String name;
+  final String? bio;
   final String? profilePhotoUrl;
-  final Map<String, String> socialLinks;
-  late final double profileCompleteness;
-  final double? cgpa;
-  final double? attendance;
-  final DateTime createdAt;
-  final DateTime updatedAt;
+  final String? linkedinUrl;
+  final String? githubUrl;
+  final String? portfolioUrl;
+  final String? leetcodeUrl;
+  final String? codeforcesUrl;
+  final String? codechefUrl;
+  final int profileCompleteness;
+  final DateTime? updatedAt;
 
-  ProfileModel({
-    String? id,
+  const ProfileModel({
     required this.userId,
-    required this.name,
+    this.bio,
     this.profilePhotoUrl,
-    Map<String, String>? socialLinks,
-    this.cgpa,
-    this.attendance,
-    DateTime? createdAt,
-    DateTime? updatedAt,
-  })  : id = id ?? const Uuid().v4(),
-        socialLinks = socialLinks ?? {},
-        profileCompleteness = _calculateProfileCompleteness(socialLinks ?? {}),
-        createdAt = createdAt ?? DateTime.now(),
-        updatedAt = updatedAt ?? DateTime.now();
+    this.linkedinUrl,
+    this.githubUrl,
+    this.portfolioUrl,
+    this.leetcodeUrl,
+    this.codeforcesUrl,
+    this.codechefUrl,
+    this.profileCompleteness = 0,
+    this.updatedAt,
+  });
+
+  // ── Hive serialisation (legacy camelCase) ─────────────────────────────────
 
   Map<String, dynamic> toMap() {
     return {
-      'id': id,
       'userId': userId,
-      'name': name,
+      'bio': bio,
       'profilePhotoUrl': profilePhotoUrl,
-      'socialLinks': socialLinks,
-      'cgpa': cgpa,
-      'attendance': attendance,
-      'createdAt': createdAt.toIso8601String(),
-      'updatedAt': updatedAt.toIso8601String(),
+      'linkedinUrl': linkedinUrl,
+      'githubUrl': githubUrl,
+      'portfolioUrl': portfolioUrl,
+      'leetcodeUrl': leetcodeUrl,
+      'codeforcesUrl': codeforcesUrl,
+      'codechefUrl': codechefUrl,
+      'profileCompleteness': profileCompleteness,
+      'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 
   factory ProfileModel.fromMap(Map<String, dynamic> map) {
     return ProfileModel(
-      id: map['id'],
-      userId: map['userId'],
-      name: map['name'],
-      profilePhotoUrl: map['profilePhotoUrl'],
-      socialLinks: Map<String, String>.from(map['socialLinks'] ?? {}),
-      cgpa: map['cgpa']?.toDouble(),
-      attendance: map['attendance']?.toDouble(),
-      createdAt: DateTime.parse(map['createdAt']),
-      updatedAt: DateTime.parse(map['updatedAt']),
+      userId: map['userId'] as String? ?? map['user_id'] as String? ?? '',
+      bio: map['bio'] as String?,
+      profilePhotoUrl:
+          map['profilePhotoUrl'] as String? ?? map['profile_photo_url'] as String?,
+      linkedinUrl:
+          map['linkedinUrl'] as String? ?? map['linkedin_url'] as String?,
+      githubUrl: map['githubUrl'] as String? ?? map['github_url'] as String?,
+      portfolioUrl:
+          map['portfolioUrl'] as String? ?? map['portfolio_url'] as String?,
+      leetcodeUrl:
+          map['leetcodeUrl'] as String? ?? map['leetcode_url'] as String?,
+      codeforcesUrl:
+          map['codeforcesUrl'] as String? ?? map['codeforces_url'] as String?,
+      codechefUrl:
+          map['codechefUrl'] as String? ?? map['codechef_url'] as String?,
+      profileCompleteness:
+          map['profileCompleteness'] as int? ?? map['profile_completeness'] as int? ?? 0,
+      updatedAt: map['updatedAt'] != null
+          ? DateTime.parse(map['updatedAt'] as String)
+          : map['updated_at'] != null
+              ? DateTime.parse(map['updated_at'] as String)
+              : null,
     );
+  }
+
+  // ── Supabase serialisation ────────────────────────────────────────────────
+
+  factory ProfileModel.fromSupabaseMap(Map<String, dynamic> map) {
+    return ProfileModel(
+      userId: map['user_id'] as String,
+      bio: map['bio'] as String?,
+      profilePhotoUrl: map['profile_photo_url'] as String?,
+      linkedinUrl: map['linkedin_url'] as String?,
+      githubUrl: map['github_url'] as String?,
+      portfolioUrl: map['portfolio_url'] as String?,
+      leetcodeUrl: map['leetcode_url'] as String?,
+      codeforcesUrl: map['codeforces_url'] as String?,
+      codechefUrl: map['codechef_url'] as String?,
+      profileCompleteness: map['profile_completeness'] as int? ?? 0,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'] as String)
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toSupabaseMap() {
+    return {
+      'user_id': userId,
+      'bio': bio,
+      'profile_photo_url': profilePhotoUrl,
+      'linkedin_url': linkedinUrl,
+      'github_url': githubUrl,
+      'portfolio_url': portfolioUrl,
+      'leetcode_url': leetcodeUrl,
+      'codeforces_url': codeforcesUrl,
+      'codechef_url': codechefUrl,
+      'profile_completeness': computedCompleteness,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+  }
+
+  int get computedCompleteness {
+    int filled = 0;
+    const total = 7;
+    if (bio?.isNotEmpty == true) filled++;
+    if (linkedinUrl?.isNotEmpty == true) filled++;
+    if (githubUrl?.isNotEmpty == true) filled++;
+    if (leetcodeUrl?.isNotEmpty == true) filled++;
+    if (codeforcesUrl?.isNotEmpty == true) filled++;
+    if (codechefUrl?.isNotEmpty == true) filled++;
+    if (portfolioUrl?.isNotEmpty == true) filled++;
+    return ((filled / total) * 100).round();
   }
 
   ProfileModel copyWith({
-    String? id,
     String? userId,
-    String? name,
+    String? bio,
     String? profilePhotoUrl,
-    Map<String, String>? socialLinks,
-    double? cgpa,
-    double? attendance,
-    DateTime? createdAt,
+    String? linkedinUrl,
+    String? githubUrl,
+    String? portfolioUrl,
+    String? leetcodeUrl,
+    String? codeforcesUrl,
+    String? codechefUrl,
+    int? profileCompleteness,
     DateTime? updatedAt,
   }) {
     return ProfileModel(
-      id: id ?? this.id,
       userId: userId ?? this.userId,
-      name: name ?? this.name,
+      bio: bio ?? this.bio,
       profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
-      socialLinks: socialLinks ?? this.socialLinks,
-      cgpa: cgpa ?? this.cgpa,
-      attendance: attendance ?? this.attendance,
-      createdAt: createdAt ?? this.createdAt,
+      linkedinUrl: linkedinUrl ?? this.linkedinUrl,
+      githubUrl: githubUrl ?? this.githubUrl,
+      portfolioUrl: portfolioUrl ?? this.portfolioUrl,
+      leetcodeUrl: leetcodeUrl ?? this.leetcodeUrl,
+      codeforcesUrl: codeforcesUrl ?? this.codeforcesUrl,
+      codechefUrl: codechefUrl ?? this.codechefUrl,
+      profileCompleteness: profileCompleteness ?? this.profileCompleteness,
       updatedAt: updatedAt ?? this.updatedAt,
     );
-  }
-
-  static double _calculateProfileCompleteness(Map<String, String> socialLinks) {
-    int completedFields = 0;
-    int totalFields = 7; // name, profilePhoto, and 5 social platforms
-
-    // Name is always considered completed since it's required
-    completedFields++;
-
-    final platforms = ['linkedin', 'github', 'leetcode', 'codeforces', 'codechef'];
-    for (final platform in platforms) {
-      if (socialLinks.containsKey(platform) && socialLinks[platform]!.isNotEmpty) {
-        completedFields++;
-      }
-    }
-
-    return completedFields / totalFields;
   }
 }

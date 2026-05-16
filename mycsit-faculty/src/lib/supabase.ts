@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js';
 // Replace with your actual Supabase project credentials
 // Dashboard → Settings → API
 const SUPABASE_URL = 'https://znhipxtgjileabyrooxf.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuaGl4dGdqaWxlYWJ5cm9veGYiLCJpYXQiOjE3MzQwMDI4NzcsImV4cCI6MjA0OTU3ODg3N30.8QGhWjKxTl5iZ2x1nLZxVqGhJdY7Z2x1nLZxVqGhJdY';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpuaGlweHRnamlsZWFieXJvb3hmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MzIwMDIsImV4cCI6MjA5MzQwODAwMn0.HJ87zzQ94-ZDq7O_6oPK4GuWpp0d9u2Xl9lC96HV92o';
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../providers/mock_auth_provider.dart';
-import '../services/mock_auth_service.dart';
+import '../core/theme/app_theme.dart';
+import '../services/auth_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -13,95 +13,81 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
+  final _rollController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isLoading = false;
 
   @override
   void dispose() {
-    _emailController.dispose();
+    _rollController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
-    print('LoginScreen: Login button clicked');
-    print('LoginScreen: Roll number: ${_emailController.text.trim()}');
-    print('LoginScreen: Password: ${_passwordController.text}');
-    
-    if (!_formKey.currentState!.validate()) {
-      print('LoginScreen: Form validation failed');
-      return;
-    }
-    
-    print('LoginScreen: Form validation passed, starting login');
+    if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     try {
-      await MockAuthService.signIn(
-            _emailController.text.trim(),
-            _passwordController.text,
-          );
-      print('LoginScreen: Login successful');
-      // Router will redirect based on user status after auth state changes
+      await AuthService.signIn(
+        _rollController.text.trim(),
+        _passwordController.text,
+      );
+      // Router auto-redirects based on student status
     } catch (e) {
-      print('LoginScreen: Login failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_friendlyError(e.toString()))),
+          SnackBar(
+            content: Text(AuthService.friendlyError(e)),
+            backgroundColor: AppTheme.error,
+          ),
         );
       }
     } finally {
-      if (mounted) {
-        print('LoginScreen: Setting loading to false');
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
-  }
-
-  String _friendlyError(String raw) {
-    if (raw.contains('user-not-found') || raw.contains('wrong-password') || raw.contains('invalid-credential')) {
-      return 'Invalid email or password.';
-    }
-    if (raw.contains('network')) return 'Network error. Check your connection.';
-    return 'Login failed. Please try again.';
   }
 
   @override
   Widget build(BuildContext context) {
-    print('LoginScreen: Building login screen');
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.surface,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(AppTheme.spacingLg),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 48),
-                const Text(
+                const SizedBox(height: AppTheme.spacing2xl),
+                Text(
                   'Welcome Back',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
+                const SizedBox(height: AppTheme.spacingXs),
+                Text(
                   'Sign in with your roll number',
-                  style: TextStyle(fontSize: 15, color: Color(0xFF6B7280)),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: AppTheme.textSecondary,
+                      ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: AppTheme.spacing2xl),
                 TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.text,
+                  controller: _rollController,
+                  textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
                     labelText: 'Roll Number',
                     hintText: 'e.g. 0101CS221001',
                     prefixIcon: Icon(Icons.badge_outlined),
                   ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your roll number' : null,
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Enter your roll number' : null,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppTheme.spacingMd),
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -109,33 +95,59 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     labelText: 'Password',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      icon: Icon(
+                        _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      ),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  validator: (v) => (v == null || v.isEmpty) ? 'Enter your password' : null,
+                  validator: (v) =>
+                      (v == null || v.isEmpty) ? 'Enter your password' : null,
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: AppTheme.spacingXl),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _handleLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primaryAccent,
+                      foregroundColor: AppTheme.textInverse,
+                      padding:
+                          const EdgeInsets.symmetric(vertical: AppTheme.spacingMd),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusFull),
+                      ),
+                    ),
                     child: _isLoading
                         ? const SizedBox(
                             height: 20,
                             width: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
-                        : const Text('Login'),
+                        : const Text(
+                            'Login',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: AppTheme.spacingLg),
                 Center(
                   child: TextButton(
                     onPressed: () => context.go('/register'),
-                    child: const Text(
+                    child: Text(
                       "New here? Register",
-                      style: TextStyle(color: Color(0xFFFF6B35), fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        color: AppTheme.primaryAccent,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),

@@ -1,146 +1,175 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../core/theme/app_theme.dart';
-import '../core/components/premium_card.dart';
-import '../core/components/premium_chip.dart';
-import '../core/components/premium_empty_state.dart';
-import '../services/mock_data_service.dart';
+import '../data/models/activity_model.dart';
+import '../data/models/coding_activity_model.dart';
+import '../providers/auth_provider.dart';
+import '../providers/supabase_providers.dart';
+import 'add_activity_sheet.dart';
+import 'add_coding_sheet.dart';
 
-class PremiumActivitiesScreen extends StatefulWidget {
+class PremiumActivitiesScreen extends ConsumerStatefulWidget {
   const PremiumActivitiesScreen({super.key});
 
   @override
-  State<PremiumActivitiesScreen> createState() => _PremiumActivitiesScreenState();
+  ConsumerState<PremiumActivitiesScreen> createState() =>
+      _PremiumActivitiesScreenState();
 }
 
-class _PremiumActivitiesScreenState extends State<PremiumActivitiesScreen> {
-  String _selectedFilter = 'All';
-  final List<String> _filters = ['All', 'Workshop', 'Seminar', 'Competition', 'Project'];
+class _PremiumActivitiesScreenState
+    extends ConsumerState<PremiumActivitiesScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  String _activityFilter = 'All';
+
+  static const _activityFilters = [
+    'All',
+    'Hackathon',
+    'Certification',
+    'Research',
+    'Project',
+    'Internship',
+    'Achievement',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final activities = MockDataService.getActivities();
-    final filteredActivities = _selectedFilter == 'All'
-        ? activities
-        : activities.where((a) => a.type.toLowerCase() == _selectedFilter.toLowerCase()).toList();
+    final uid = ref.watch(currentUidProvider);
 
     return Scaffold(
       backgroundColor: AppTheme.background,
       body: SafeArea(
         child: Column(
           children: [
-            // App Bar
-            _buildAppBar(context),
-            
-            // Filter Chips
-            _buildFilterChips(),
-            
-            // Activities List
+            _buildHeader(context, uid),
+            TabBar(
+              controller: _tabController,
+              labelColor: AppTheme.primaryAccent,
+              unselectedLabelColor: AppTheme.textMuted,
+              indicatorColor: AppTheme.primaryAccent,
+              tabs: const [
+                Tab(text: 'Activities'),
+                Tab(text: 'Coding'),
+              ],
+            ),
             Expanded(
-              child: filteredActivities.isEmpty
-                  ? PremiumEmptyState(
-                      icon: Icons.event_busy,
-                      title: 'No activities found',
-                      subtitle: 'Try changing your filter or check back later',
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(AppTheme.spacingMd),
-                      itemCount: filteredActivities.length,
-                      itemBuilder: (context, index) {
-                        final activity = filteredActivities[index];
-                        return _buildActivityCard(context, activity, index);
-                      },
+              child: uid == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildActivitiesTab(uid),
+                        _buildCodingTab(uid),
+                      ],
                     ),
             ),
           ],
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Add activity feature coming soon!'),
-              backgroundColor: AppTheme.warning,
-            ),
-          );
-        },
+        onPressed: () => _showAddSheet(context),
         backgroundColor: AppTheme.primaryAccent,
-        icon: const Icon(Icons.add),
-        label: const Text('Add Activity'),
+        icon: const Icon(Icons.add, color: Colors.white),
+        label: const Text('Add Entry',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
       ),
     );
   }
 
-  Widget _buildAppBar(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingMd,
-        vertical: AppTheme.spacingSm,
-      ),
+  Widget _buildHeader(BuildContext context, String? uid) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(AppTheme.spacingMd, AppTheme.spacingMd,
+          AppTheme.spacingMd, AppTheme.spacingXs),
       child: Row(
         children: [
-          Text(
-            'Activities',
-            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          const Spacer(),
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              boxShadow: AppTheme.shadowSm,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.search),
-              onPressed: () {
-                // Search functionality
-              },
+          Expanded(
+            child: Text(
+              'My Activities',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
           ),
-          const SizedBox(width: AppTheme.spacingSm),
-          Container(
-            decoration: BoxDecoration(
-              color: AppTheme.surface,
-              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              boxShadow: AppTheme.shadowSm,
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.filter_list),
-              onPressed: () {
-                // Advanced filter
-              },
-            ),
-          ),
+          if (uid != null) _NotificationBell(uid: uid),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChips() {
-    return Container(
-      height: 50,
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppTheme.spacingMd,
-        vertical: AppTheme.spacingSm,
-      ),
-      child: ListView.builder(
+  Widget _buildActivitiesTab(String uid) {
+    final activitiesAsync = ref.watch(activitiesProvider(uid));
+
+    return activitiesAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+          child: Text('Error loading activities.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppTheme.textMuted))),
+      data: (activities) {
+        final filtered = _activityFilter == 'All'
+            ? activities
+            : activities
+                .where((a) =>
+                    a.type.name.toLowerCase() ==
+                    _activityFilter.toLowerCase())
+                .toList();
+
+        return Column(
+          children: [
+            _buildActivityFilters(),
+            Expanded(
+              child: filtered.isEmpty
+                  ? _buildEmpty('No activities yet',
+                      'Add your first activity to get started.')
+                  : ListView.builder(
+                      padding:
+                          const EdgeInsets.all(AppTheme.spacingMd),
+                      itemCount: filtered.length,
+                      itemBuilder: (_, i) =>
+                          _buildActivityCard(filtered[i]),
+                    ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildActivityFilters() {
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: _filters.length,
-        itemBuilder: (context, index) {
-          final filter = _filters[index];
-          final isSelected = _selectedFilter == filter;
-          return Padding(
-            padding: const EdgeInsets.only(right: AppTheme.spacingSm),
-            child: PremiumChip(
-              label: filter,
-              isSelected: isSelected,
-              onTap: () {
-                setState(() {
-                  _selectedFilter = filter;
-                });
-              },
+        padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+        itemCount: _activityFilters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: AppTheme.spacingXs),
+        itemBuilder: (_, i) {
+          final f = _activityFilters[i];
+          final isSelected = _activityFilter == f;
+          return ChoiceChip(
+            label: Text(f),
+            selected: isSelected,
+            onSelected: (_) => setState(() => _activityFilter = f),
+            selectedColor: AppTheme.primaryAccent,
+            labelStyle: TextStyle(
+              color: isSelected ? Colors.white : AppTheme.textSecondary,
+              fontWeight: FontWeight.w500,
             ),
           );
         },
@@ -148,177 +177,318 @@ class _PremiumActivitiesScreenState extends State<PremiumActivitiesScreen> {
     );
   }
 
-  Widget _buildActivityCard(BuildContext context, dynamic activity, int index) {
-    final color = _getActivityColor(activity.type);
-    final icon = _getActivityIcon(activity.type);
+  Widget _buildCodingTab(String uid) {
+    final codingAsync = ref.watch(codingActivitiesProvider(uid));
 
-    return PremiumCard(
-      onTap: () {
-        // Navigate to activity detail
+    return codingAsync.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, __) => Center(
+          child: Text('Error loading coding activities.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: AppTheme.textMuted))),
+      data: (activities) {
+        if (activities.isEmpty) {
+          return _buildEmpty('No coding activities yet',
+              'Add your first coding achievement to get started.');
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.all(AppTheme.spacingMd),
+          itemCount: activities.length,
+          itemBuilder: (_, i) => _buildCodingCard(activities[i]),
+        );
       },
-      padding: EdgeInsets.zero,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header with icon and points
-          Container(
-            padding: const EdgeInsets.all(AppTheme.spacingMd),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.05),
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(AppTheme.radiusLg),
-              ),
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppTheme.spacingSm),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  ),
-                  child: Icon(icon, size: 24, color: color),
-                ),
-                const SizedBox(width: AppTheme.spacingMd),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        activity.title,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      const SizedBox(height: AppTheme.spacingXxs),
-                      Text(
-                        activity.type,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.textSecondary,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacingSm,
-                    vertical: AppTheme.spacingXs,
-                  ),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.add,
-                        size: 14,
-                        color: AppTheme.primaryAccent,
-                      ),
-                      const SizedBox(width: AppTheme.spacingXxs),
-                      Text(
-                        '${activity.points} pts',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: AppTheme.primaryAccent,
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+    );
+  }
+
+  Widget _buildActivityCard(ActivityModel a) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+      child: InkWell(
+        onTap: () => context.push('/app/activity/${a.id}'),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: Container(
+          padding: const EdgeInsets.all(AppTheme.spacingMd),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            border: Border.all(color: AppTheme.border),
+            boxShadow: AppTheme.shadowSm,
           ),
-          
-          // Content
-          Padding(
-            padding: const EdgeInsets.all(AppTheme.spacingMd),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  activity.description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AppTheme.textSecondary,
-                        height: 1.5,
-                      ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: _activityColor(a.type).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
                 ),
-                const SizedBox(height: AppTheme.spacingMd),
-                
-                // Metadata row
-                Row(
+                child: Icon(_activityIcon(a.type),
+                    color: _activityColor(a.type), size: 24),
+              ),
+              const SizedBox(width: AppTheme.spacingMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildMetadataItem(
-                      Icons.calendar_today,
-                      activity.date,
-                      AppTheme.textSecondary,
+                    Text(
+                      a.title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: AppTheme.spacingLg),
-                    _buildMetadataItem(
-                      Icons.location_on,
-                      'Online',
-                      AppTheme.textSecondary,
-                    ),
-                    const Spacer(),
-                    StatusChip(
-                      label: 'Approved',
-                      status: StatusType.approved,
+                    const SizedBox(height: 2),
+                    Text(
+                      '${_activityTypeName(a.type)} · ${a.date.day}/${a.date.month}/${a.date.year}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppTheme.textMuted),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ).animate().fadeIn(delay: (index * 100).ms).slideX(begin: 0.1, end: 0);
-  }
-
-  Widget _buildMetadataItem(IconData icon, String text, Color color) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: color),
-        const SizedBox(width: AppTheme.spacingXxs),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: color,
               ),
+              _statusBadge(a.status.name),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 
-  Color _getActivityColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'workshop':
-        return AppTheme.info;
-      case 'seminar':
-        return AppTheme.warning;
-      case 'competition':
-        return AppTheme.error;
-      case 'project':
-        return AppTheme.success;
+  Widget _buildCodingCard(CodingActivityModel a) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTheme.spacingMd),
+      child: InkWell(
+        onTap: () => context.push('/app/coding/${a.id}'),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: Container(
+          padding: const EdgeInsets.all(AppTheme.spacingMd),
+          decoration: BoxDecoration(
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            border: Border.all(color: AppTheme.border),
+            boxShadow: AppTheme.shadowSm,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppTheme.info.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                ),
+                child: const Icon(Icons.code, color: AppTheme.info, size: 24),
+              ),
+              const SizedBox(width: AppTheme.spacingMd),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      a.title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${a.platform} · ${_codingTypeName(a.type)}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: AppTheme.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              _statusBadge(a.status.name),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statusBadge(String status) {
+    Color color;
+    Color bg;
+    switch (status) {
+      case 'approved':
+        color = AppTheme.success;
+        bg = AppTheme.successLight;
+        break;
+      case 'rejected':
+        color = AppTheme.error;
+        bg = AppTheme.errorLight;
+        break;
       default:
+        color = AppTheme.warning;
+        bg = AppTheme.warningLight;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spacingXs, vertical: 4),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(AppTheme.radiusSm)),
+      child: Text(
+        status.toUpperCase(),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(String title, String subtitle) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppTheme.spacingXl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inbox_outlined, size: 64, color: AppTheme.textMuted),
+            const SizedBox(height: AppTheme.spacingMd),
+            Text(title,
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center),
+            const SizedBox(height: AppTheme.spacingXs),
+            Text(subtitle,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: AppTheme.textMuted),
+                textAlign: TextAlign.center),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showAddSheet(BuildContext context) {
+    final tab = _tabController.index;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) =>
+          tab == 0 ? const AddActivitySheet() : const AddCodingSheet(),
+    );
+  }
+
+  Color _activityColor(ActivityType type) {
+    switch (type) {
+      case ActivityType.hackathon:
+        return AppTheme.warning;
+      case ActivityType.certification:
+        return AppTheme.success;
+      case ActivityType.research:
+        return AppTheme.info;
+      case ActivityType.project:
         return AppTheme.primaryAccent;
+      case ActivityType.internship:
+        return const Color(0xFF9C27B0);
+      case ActivityType.achievement:
+        return const Color(0xFFFF9800);
     }
   }
 
-  IconData _getActivityIcon(String type) {
-    switch (type.toLowerCase()) {
-      case 'workshop':
-        return Icons.build;
-      case 'seminar':
-        return Icons.record_voice_over;
-      case 'competition':
+  IconData _activityIcon(ActivityType type) {
+    switch (type) {
+      case ActivityType.hackathon:
         return Icons.emoji_events;
-      case 'project':
+      case ActivityType.certification:
+        return Icons.workspace_premium;
+      case ActivityType.research:
+        return Icons.science;
+      case ActivityType.project:
         return Icons.code;
-      default:
-        return Icons.event;
+      case ActivityType.internship:
+        return Icons.work_outline;
+      case ActivityType.achievement:
+        return Icons.military_tech;
     }
+  }
+
+  String _activityTypeName(ActivityType type) {
+    switch (type) {
+      case ActivityType.hackathon:
+        return 'Hackathon';
+      case ActivityType.certification:
+        return 'Certification';
+      case ActivityType.research:
+        return 'Research';
+      case ActivityType.project:
+        return 'Project';
+      case ActivityType.internship:
+        return 'Internship';
+      case ActivityType.achievement:
+        return 'Achievement';
+    }
+  }
+
+  String _codingTypeName(CodingType type) {
+    switch (type) {
+      case CodingType.milestone:
+        return 'Milestone';
+      case CodingType.contest:
+        return 'Contest';
+      case CodingType.highValueProblem:
+        return 'Notable Problem';
+    }
+  }
+}
+
+class _NotificationBell extends ConsumerWidget {
+  final String uid;
+  const _NotificationBell({required this.uid});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(unreadNotificationCountProvider(uid));
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          icon: const Icon(Icons.notifications_outlined,
+              color: AppTheme.textSecondary),
+          onPressed: () => context.push('/app/notifications'),
+        ),
+        if (count > 0)
+          Positioned(
+            top: 6,
+            right: 6,
+            child: Container(
+              width: 16,
+              height: 16,
+              decoration: const BoxDecoration(
+                color: AppTheme.error,
+                shape: BoxShape.circle,
+              ),
+              child: Center(
+                child: Text(
+                  count > 9 ? '9+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }

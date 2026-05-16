@@ -82,7 +82,7 @@ export async function getPendingStudents(): Promise<Student[]> {
     .from('users')
     .select('*')
     .eq('role', 'student')
-    .eq('status', 'active')  // Changed to active since we removed approval
+    .eq('status', 'pending')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []).map((r) => rowToStudent(r as Record<string, unknown>));
@@ -227,14 +227,21 @@ export async function updateStudentStatus(
   status: 'active' | 'rejected',
   reason?: string
 ): Promise<void> {
-  const payload: Record<string, unknown> = { status };
-  if (status === 'rejected' && reason?.trim()) {
-    payload.rejection_reason = reason.trim();
-  } else if (status === 'active') {
-    payload.rejection_reason = null;
-  }
-  const { error } = await supabase.from('users').update(payload).eq('id', uid);
+  // users table has no rejection_reason column — only update status
+  const { error } = await supabase.from('users').update({ status }).eq('id', uid);
   if (error) throw error;
+
+  // DB trigger creates a generic notification; if faculty provided a specific reason,
+  // create an additional notification so the student sees it
+  if (status === 'rejected' && reason?.trim()) {
+    try {
+      await supabase.rpc('create_notification', {
+        p_user_id: uid,
+        p_title: 'Rejection Reason',
+        p_message: reason.trim(),
+      });
+    } catch (_) {}
+  }
 }
 
 // ─── Activity Queries ─────────────────────────────────────────────────────────

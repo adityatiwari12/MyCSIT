@@ -1,6 +1,7 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Eye, Download, ChevronUp, ChevronDown } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
 import { getActiveStudents } from '../../lib/firestore';
 import type { Student, FilterState } from '../../types';
 
@@ -28,12 +29,32 @@ export function StudentsPage() {
   const [page, setPage] = useState(0);
   const PAGE_SIZE = 20;
   const navigate = useNavigate();
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  useEffect(() => {
+  const loadStudents = () => {
     getActiveStudents().then((s) => {
       setStudents(s);
       setLoading(false);
     });
+  };
+
+  useEffect(() => {
+    loadStudents();
+
+    channelRef.current = supabase
+      .channel('students-realtime')
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'users',
+        filter: "role=eq.student",
+      }, loadStudents)
+      .on('postgres_changes', {
+        event: '*', schema: 'public', table: 'score_cache',
+      }, loadStudents)
+      .subscribe();
+
+    return () => {
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+    };
   }, []);
 
   const filtered = useMemo(() => {

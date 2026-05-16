@@ -1,24 +1,18 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../data/models/student_model.dart';
 
 class AuthService {
-  final _client = Supabase.instance.client;
+  static final _client = Supabase.instance.client;
 
-  Stream<User?> get authStateChanges => _client.auth.onAuthStateChange
-      .map((state) => state.session?.user);
+  static String _emailFromRoll(String rollNumber) =>
+      '${rollNumber.trim().toLowerCase()}@mycsit.app';
 
-  User? get currentUser => _client.auth.currentUser;
+  static Stream<User?> get authStateChanges =>
+      _client.auth.onAuthStateChange.map((e) => e.session?.user);
 
-  Future<AuthResponse> signIn(String email, String password) {
-    // Try login with roll number as email (since we register with rollnumber@mycsit.app)
-    final loginEmail = email.contains('@') ? email : '${email.trim().toLowerCase()}@mycsit.app';
-    print('Attempting login with email: $loginEmail');
-    
-    return _client.auth.signInWithPassword(email: loginEmail, password: password);
-  }
+  static User? get currentUser => _client.auth.currentUser;
 
-  Future<void> signOut() => _client.auth.signOut();
-
-  Future<AuthResponse> registerStudent({
+  static Future<void> register({
     required String name,
     required String rollNumber,
     required String password,
@@ -26,58 +20,73 @@ class AuthService {
     required String section,
     required String email,
   }) async {
-    try {
-      print('Starting registration for email: $email');
-      
-      // Create real Supabase auth user
-      final authEmail = '${rollNumber.trim().toLowerCase()}@mycsit.app';
-      print('Using auth email: $authEmail (instead of: $email)');
-      
-      final authResponse = await _client.auth.signUp(
-        email: authEmail, // Use roll number as email to avoid rate limits
-        password: password,
-        data: {
-          'name': name,
-          'roll_number': rollNumber.trim().toUpperCase(),
-        },
-      );
-      
-      print('Auth response: ${authResponse.user?.id}');
-      
-      if (authResponse.user != null) {
-        try {
-          print('Storing user data in database');
-          
-          final insertData = {
-            'id': authResponse.user!.id,
-            'name': name,
-            'roll_number': rollNumber.trim().toUpperCase(),
-            'year': year,
-            'section': section,
-            'role': 'student',
-            'status': 'active',
-            'created_at': DateTime.now().toIso8601String(),
-          };
-          
-          print('Insert data: $insertData');
-          
-          await _client.from('users').insert(insertData);
-          print('User data stored successfully');
-          
-          return authResponse;
-          
-        } catch (dbError) {
-          print('Database insert failed: $dbError');
-          // Continue even if DB insert fails - user is already authenticated
-          return authResponse;
-        }
-      }
-      
-      return authResponse;
-      
-    } catch (error) {
-      print('Registration failed: $error');
-      throw error;
+    final authEmail = _emailFromRoll(rollNumber);
+    final res = await _client.auth.signUp(
+      email: authEmail,
+      password: password,
+      data: {'name': name, 'roll_number': rollNumber.trim().toUpperCase()},
+    );
+
+    if (res.user == null) {
+      throw Exception('Registration failed — no user returned from auth.');
     }
+
+    await _client.from('users').insert({
+      'id': res.user!.id,
+      'name': name.trim(),
+      'roll_number': rollNumber.trim().toUpperCase(),
+      'year': year,
+      'section': section,
+      'role': 'student',
+      'status': 'pending',
+    });
+  }
+
+  static Future<void> signIn(String rollNumber, String password) async {
+    final authEmail = rollNumber.contains('@')
+        ? rollNumber
+        : _emailFromRoll(rollNumber);
+    await _client.auth.signInWithPassword(
+      email: authEmail,
+      password: password,
+    );
+  }
+
+  static Future<void> signOut() async {
+    await _client.auth.signOut();
+  }
+
+  static Future<StudentModel?> fetchCurrentStudent() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+    final data = await _client
+        .from('users')
+        .select()
+        .eq('id', user.id)
+        .maybeSingle();
+    if (data == null) return null;
+    return StudentModel.fromMap(data);
+  }
+
+  static String friendlyError(Object error) {
+    final msg = error.toString();
+    if (msg.contains('Email rate limit') || msg.contains('429')) {
+      return 'Too many attempts. Please wait a few minutes and try again.';
+    }
+    if (msg.contains('already registered') || msg.contains('already exists') ||
+        msg.contains('duplicate') || msg.contains('unique')) {
+      return 'This roll number is already registered.';
+    }
+    if (msg.contains('Invalid login credentials') ||
+        msg.contains('invalid_credentials')) {
+      return 'Invalid roll number or password.';
+    }
+    if (msg.contains('network') || msg.contains('SocketException')) {
+      return 'Network error. Check your internet connection.';
+    }
+    if (msg.contains('weak_password')) {
+      return 'Password is too weak. Use at least 6 characters.';
+    }
+    return 'Something went wrong. Please try again.';
   }
 }

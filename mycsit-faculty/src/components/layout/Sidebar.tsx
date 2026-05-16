@@ -6,6 +6,7 @@ import {
   BookOpen,
   CalendarCheck,
   BarChart2,
+  Trophy,
   LogOut,
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
@@ -18,6 +19,7 @@ const navItems = [
   { to: '/dashboard/marks', icon: BookOpen, label: 'Marks' },
   { to: '/dashboard/attendance', icon: CalendarCheck, label: 'Attendance' },
   { to: '/dashboard/analytics', icon: BarChart2, label: 'Analytics' },
+  { to: '/dashboard/leaderboard', icon: Trophy, label: 'Leaderboard' },
 ];
 
 export function Sidebar() {

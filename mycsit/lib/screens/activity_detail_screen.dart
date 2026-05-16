@@ -1,238 +1,422 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../models/activity_model.dart';
-import '../providers/data_provider.dart';
-import '../providers/user_provider.dart';
+import '../core/theme/app_theme.dart';
+import '../data/models/activity_model.dart';
+import '../data/repositories/activity_repository.dart';
+import '../providers/auth_provider.dart';
+import '../providers/supabase_providers.dart';
 
-class ActivityDetailScreen extends ConsumerWidget {
+class ActivityDetailScreen extends ConsumerStatefulWidget {
   final String activityId;
+
   const ActivityDetailScreen({super.key, required this.activityId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final activitiesAsync = ref.watch(activitiesStreamProvider);
-
-    final activity = activitiesAsync.valueOrNull
-        ?.where((a) => a.id == activityId)
-        .firstOrNull;
-
-    if (activitiesAsync.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-
-    if (activity == null) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text('Activity'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.go('/home/activities'),
-          ),
-        ),
-        body: const Center(child: Text('Activity not found')),
-      );
-    }
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
-      appBar: AppBar(
-        title: const Text('Activity Details'),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/home/activities'),
-        ),
-        actions: [
-          if (activity.status == EntryStatus.rejected)
-            TextButton(
-              onPressed: () => _confirmDelete(context, ref, activity),
-              child: const Text('Delete', style: TextStyle(color: Color(0xFFEF4444))),
-            ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Status banner
-            _StatusBanner(status: activity.status, reason: activity.rejectionReason),
-            const SizedBox(height: 16),
-
-            // Title & Type
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFF0F0F0)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Chip(
-                    label: Text(activity.typeLabel),
-                    backgroundColor: const Color(0xFFFFF3EE),
-                    labelStyle: const TextStyle(color: Color(0xFFFF6B35), fontWeight: FontWeight.w600, fontSize: 12),
-                    side: BorderSide.none,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    activity.title,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
-                  ),
-                  if (activity.description != null && activity.description!.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Text(activity.description!,
-                        style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280), height: 1.5)),
-                  ],
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      const Icon(Icons.calendar_today_outlined, size: 14, color: Color(0xFF9CA3AF)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Submitted on ${_formatDate(activity.createdAt)}',
-                        style: const TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // Proof
-            if (activity.proofUrl != null) ...[
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFF0F0F0)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text('Proof',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: Color(0xFF1A1A2E))),
-                    const SizedBox(height: 12),
-                    GestureDetector(
-                      onTap: () async {
-                        final uri = Uri.parse(activity.proofUrl!);
-                        if (await canLaunchUrl(uri)) {
-                          launchUrl(uri, mode: LaunchMode.externalApplication);
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0F7FF),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.3)),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.open_in_new_rounded, color: Color(0xFF3B82F6), size: 18),
-                            SizedBox(width: 10),
-                            Text('View Proof Document',
-                                style: TextStyle(
-                                    color: Color(0xFF3B82F6), fontSize: 14, fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, ActivityModel activity) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Activity'),
-        content: const Text('This will permanently delete the activity.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Color(0xFFEF4444))),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await ref.read(firestoreServiceProvider).deleteActivity(activity.id);
-      if (context.mounted) context.go('/home/activities');
-    }
-  }
-
-  String _formatDate(DateTime dt) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
+  ConsumerState<ActivityDetailScreen> createState() =>
+      _ActivityDetailScreenState();
 }
 
-class _StatusBanner extends StatelessWidget {
-  final EntryStatus status;
-  final String? reason;
-  const _StatusBanner({required this.status, this.reason});
+class _ActivityDetailScreenState extends ConsumerState<ActivityDetailScreen> {
+  ActivityModel? _activity;
+  bool _isLoading = true;
+  bool _isEditing = false;
+  bool _isSaving = false;
+  late TextEditingController _titleCtrl;
+  late TextEditingController _descCtrl;
+  DateTime? _editedDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _titleCtrl = TextEditingController();
+    _descCtrl = TextEditingController();
+    _loadActivity();
+  }
+
+  @override
+  void dispose() {
+    _titleCtrl.dispose();
+    _descCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadActivity() async {
+    final uid = ref.read(currentUidProvider);
+    if (uid == null) return;
+
+    try {
+      // Try Supabase first
+      final row = await Supabase.instance.client
+          .from('activities')
+          .select()
+          .eq('id', widget.activityId)
+          .maybeSingle();
+
+      if (row != null) {
+        final a = ActivityModel.fromSupabaseMap(row);
+        _titleCtrl.text = a.title;
+        _descCtrl.text = a.description;
+        _editedDate = a.date;
+        if (mounted) setState(() { _activity = a; _isLoading = false; });
+        return;
+      }
+    } catch (_) {}
+
+    // Fallback: search Hive
+    final uid2 = ref.read(currentUidProvider) ?? '';
+    final all = await ActivityRepository.getActivities(uid2);
+    final found = all.cast<ActivityModel?>()
+        .firstWhere((a) => a?.id == widget.activityId, orElse: () => null);
+    if (found != null) {
+      _titleCtrl.text = found.title;
+      _descCtrl.text = found.description;
+      _editedDate = found.date;
+    }
+    if (mounted) setState(() { _activity = found; _isLoading = false; });
+  }
+
+  Future<void> _saveActivity() async {
+    if (_activity == null) return;
+    if (_titleCtrl.text.trim().isEmpty || _editedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Title and date are required.')),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    try {
+      final updated = _activity!.copyWith(
+        title: _titleCtrl.text.trim(),
+        description: _descCtrl.text.trim(),
+        date: _editedDate!,
+        status: ActivityStatus.pending,
+        rejectionReason: null,
+        updatedAt: DateTime.now(),
+      );
+
+      await ActivityRepository.updateActivity(updated);
+      ref.invalidate(activitiesProvider(updated.userId));
+
+      if (mounted) {
+        setState(() { _activity = updated; _isEditing = false; _isSaving = false; });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Resubmitted for approval.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _openProof(String url) async {
+    if (url.isEmpty) return;
+    try {
+      if (url.startsWith('/') || url.startsWith('file://')) {
+        // Local file
+        final file = File(url.replaceFirst('file://', ''));
+        if (await file.exists()) {
+          final uri = Uri.file(url);
+          await launchUrl(uri);
+          return;
+        }
+      }
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open proof file.')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    late Color color;
-    late Color bg;
-    late String text;
-    late IconData icon;
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        title: Text(_isEditing ? 'Edit Activity' : 'Activity Details'),
+        backgroundColor: AppTheme.surface,
+        foregroundColor: AppTheme.textPrimary,
+        elevation: 0,
+        actions: [
+          if (_activity?.status == ActivityStatus.rejected && !_isEditing)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => setState(() => _isEditing = true),
+            ),
+          if (_isEditing)
+            _isSaving
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    icon: const Icon(Icons.check),
+                    onPressed: _saveActivity,
+                  ),
+        ],
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _activity == null
+              ? const Center(child: Text('Activity not found.'))
+              : SingleChildScrollView(
+                  padding: const EdgeInsets.all(AppTheme.spacingMd),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildStatusBanner(),
+                      const SizedBox(height: AppTheme.spacingMd),
+                      _buildInfoCard(),
+                      const SizedBox(height: AppTheme.spacingMd),
+                      _buildProofSection(),
+                      if (_activity!.rejectionReason != null) ...[
+                        const SizedBox(height: AppTheme.spacingMd),
+                        _buildRejectionBanner(),
+                      ],
+                    ],
+                  ),
+                ),
+    );
+  }
 
-    switch (status) {
-      case EntryStatus.approved:
-        color = const Color(0xFF22C55E);
-        bg = const Color(0xFFDCFCE7);
-        text = 'Approved';
-        icon = Icons.check_circle_rounded;
+  Widget _buildStatusBanner() {
+    final a = _activity!;
+    Color color;
+    Color bg;
+    IconData icon;
+    String label;
+
+    switch (a.status) {
+      case ActivityStatus.pending:
+        color = AppTheme.warning;
+        bg = AppTheme.warningLight;
+        icon = Icons.hourglass_empty;
+        label = 'Pending Approval';
         break;
-      case EntryStatus.rejected:
-        color = const Color(0xFFEF4444);
-        bg = const Color(0xFFFEE2E2);
-        text = 'Rejected';
-        icon = Icons.cancel_rounded;
+      case ActivityStatus.approved:
+        color = AppTheme.success;
+        bg = AppTheme.successLight;
+        icon = Icons.check_circle;
+        label = 'Approved';
         break;
-      default:
-        color = const Color(0xFFF59E0B);
-        bg = const Color(0xFFFEF3C7);
-        text = 'Pending Review';
-        icon = Icons.hourglass_top_rounded;
+      case ActivityStatus.rejected:
+        color = AppTheme.error;
+        bg = AppTheme.errorLight;
+        icon = Icons.cancel;
+        label = 'Rejected';
+        break;
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: color.withOpacity(0.4)),
       ),
       child: Row(
         children: [
-          Icon(icon, color: color, size: 22),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(text, style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 14)),
-                if (status == EntryStatus.rejected && reason != null)
-                  Text(reason!, style: TextStyle(fontSize: 12, color: color.withOpacity(0.8))),
-              ],
+          Icon(icon, color: color),
+          const SizedBox(width: AppTheme.spacingMd),
+          Text(
+            label,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCard() {
+    final a = _activity!;
+
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _row('Type', a.type.name.toUpperCase()),
+          const Divider(height: AppTheme.spacingLg),
+          if (_isEditing) ...[
+            TextField(
+              controller: _titleCtrl,
+              decoration: const InputDecoration(labelText: 'Title'),
             ),
+            const SizedBox(height: AppTheme.spacingMd),
+            GestureDetector(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _editedDate ?? DateTime.now(),
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime.now(),
+                );
+                if (picked != null) setState(() => _editedDate = picked);
+              },
+              child: InputDecorator(
+                decoration: const InputDecoration(labelText: 'Date'),
+                child: Text(
+                  _editedDate != null
+                      ? '${_editedDate!.day}/${_editedDate!.month}/${_editedDate!.year}'
+                      : 'Select date',
+                ),
+              ),
+            ),
+            const SizedBox(height: AppTheme.spacingMd),
+            TextField(
+              controller: _descCtrl,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+          ] else ...[
+            _row('Title', a.title),
+            const Divider(height: AppTheme.spacingLg),
+            _row('Date', '${a.date.day}/${a.date.month}/${a.date.year}'),
+            if (a.description.isNotEmpty) ...[
+              const Divider(height: AppTheme.spacingLg),
+              _row('Description', a.description),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: AppTheme.textMuted,
+              ),
+        ),
+        const SizedBox(height: AppTheme.spacingXs),
+        Text(value, style: Theme.of(context).textTheme.bodyLarge),
+      ],
+    );
+  }
+
+  Widget _buildProofSection() {
+    final a = _activity!;
+    final proofs = <String>[
+      if (a.proofUrl?.isNotEmpty == true) a.proofUrl!,
+      ...?a.proofUrls,
+    ].toSet().toList();
+
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: AppTheme.shadowSm,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Proof Documents',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: AppTheme.spacingMd),
+          if (proofs.isEmpty)
+            Text(
+              'No proof uploaded.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.textMuted,
+                  ),
+            )
+          else
+            ...proofs.map((url) => _proofItem(url)),
+        ],
+      ),
+    );
+  }
+
+  Widget _proofItem(String url) {
+    final isPdf = url.toLowerCase().endsWith('.pdf');
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppTheme.spacingSm),
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Icon(
+          isPdf ? Icons.picture_as_pdf : Icons.image_outlined,
+          color: AppTheme.primaryAccent,
+        ),
+        title: Text(
+          url.split('/').last,
+          style: Theme.of(context).textTheme.bodyMedium,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.open_in_new, color: AppTheme.primaryAccent),
+          onPressed: () => _openProof(url),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRejectionBanner() {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        color: AppTheme.errorLight,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        border: Border.all(color: AppTheme.error.withOpacity(0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.info_outline, color: AppTheme.error, size: 18),
+              const SizedBox(width: AppTheme.spacingSm),
+              Text(
+                'Rejection Reason',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: AppTheme.error,
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppTheme.spacingSm),
+          Text(
+            _activity!.rejectionReason!,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AppTheme.error,
+                ),
           ),
         ],
       ),

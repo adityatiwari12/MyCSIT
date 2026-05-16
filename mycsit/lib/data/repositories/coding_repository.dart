@@ -1,66 +1,85 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:path/path.dart' as path;
-import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../database/hive_database.dart';
 import '../models/coding_activity_model.dart';
+import '../../services/storage_service.dart';
 
 class CodingRepository {
-  static Future<List<CodingActivityModel>> getCodingActivities(String userId) async {
-    return await HiveDatabase.getCodingActivities(userId);
+  static final _client = Supabase.instance.client;
+  static final _storage = StorageService();
+
+  static Future<List<CodingActivityModel>> getCodingActivities(
+      String userId) async {
+    try {
+      final rows = await _client
+          .from('coding_activities')
+          .select()
+          .eq('user_id', userId)
+          .eq('is_deleted', false)
+          .order('created_at', ascending: false);
+      final list = rows
+          .map((r) => CodingActivityModel.fromSupabaseMap(r))
+          .toList();
+      for (final a in list) {
+        await HiveDatabase.insertCodingActivity(a);
+      }
+      return list;
+    } catch (_) {
+      return HiveDatabase.getCodingActivities(userId);
+    }
   }
 
-  static Future<List<CodingActivityModel>> getCodingActivitiesByStatus(String userId, String status) async {
-    return await HiveDatabase.getCodingActivitiesByStatus(userId, status);
+  static Future<List<CodingActivityModel>> getCodingActivitiesByStatus(
+      String userId, String status) async {
+    final all = await getCodingActivities(userId);
+    return all
+        .where((a) => a.status.name.toLowerCase() == status.toLowerCase())
+        .toList();
   }
 
   static Future<void> addCodingActivity(CodingActivityModel activity) async {
     await HiveDatabase.insertCodingActivity(activity);
+    try {
+      await _client.from('coding_activities').insert(activity.toSupabaseMap());
+    } catch (_) {}
   }
 
-  static Future<List<String>> uploadProofs(List<File> files, String userId, String activityId) async {
-    try {
-      final documentsDir = Directory.systemTemp;
-      List<String> paths = [];
-      int index = 0;
-      for (final file in files) {
-        final fileName = '${userId}_${activityId}_coding_${index}_${path.basename(file.path)}';
-        final savedFile = File(path.join(documentsDir.path, fileName));
-        
-        if (file.path.toLowerCase().endsWith('.jpg') || 
-            file.path.toLowerCase().endsWith('.jpeg') || 
-            file.path.toLowerCase().endsWith('.png')) {
-          
-          final compressedFile = await FlutterImageCompress.compressAndGetFile(
-            file.absolute.path,
-            savedFile.absolute.path,
-            quality: 80,
-          );
-          
-          if (compressedFile != null) {
-            paths.add(compressedFile.path);
-            index++;
-            continue;
-          }
-        }
-        
-        await file.copy(savedFile.path);
-        paths.add(savedFile.path);
-        index++;
+  static Future<List<String>> uploadProofs(
+      List<File> files, String userId, String activityId) async {
+    final List<String> urls = [];
+    for (final file in files) {
+      try {
+        final url = await _storage.uploadProof(
+          userId: userId,
+          entryType: 'coding',
+          file: file,
+        );
+        urls.add(url);
+      } catch (_) {
+        urls.add(file.path);
       }
-      return paths;
-    } catch (e) {
-      throw Exception('Failed to upload proofs: $e');
     }
+    return urls;
   }
 
   static Future<void> updateCodingActivity(CodingActivityModel activity) async {
     await HiveDatabase.updateCodingActivity(activity);
+    try {
+      await _client
+          .from('coding_activities')
+          .update(activity.toSupabaseMap())
+          .eq('id', activity.id);
+    } catch (_) {}
   }
 
   static Future<void> deleteCodingActivity(String id) async {
     await HiveDatabase.deleteCodingActivity(id);
+    try {
+      await _client
+          .from('coding_activities')
+          .update({'is_deleted': true}).eq('id', id);
+    } catch (_) {}
   }
 
   static Future<List<File>> pickFiles() async {
@@ -70,7 +89,6 @@ class CodingRepository {
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
         allowMultiple: true,
       );
-      
       if (result != null && result.files.isNotEmpty) {
         return result.files.map((e) => File(e.path!)).toList();
       }
@@ -78,62 +96,5 @@ class CodingRepository {
     } catch (e) {
       throw Exception('Failed to pick files: $e');
     }
-  }
-
-  static Future<int> getTotalScore(String userId) async {
-    final activities = await getCodingActivities(userId);
-    int totalScore = 0;
-    
-    for (final activity in activities) {
-      if (activity.status == CodingStatus.approved) {
-        totalScore += _getActivityPoints(activity.type, activity.value);
-      }
-    }
-    
-    return totalScore;
-  }
-
-  static int _getActivityPoints(CodingType type, int? value) {
-    switch (type) {
-      case CodingType.milestone:
-        if (value != null) {
-          // Points based on milestone (50, 100, 200, 500, 1000)
-          if (value >= 1000) return 100;
-          if (value >= 500) return 80;
-          if (value >= 200) return 60;
-          if (value >= 100) return 40;
-          if (value >= 50) return 20;
-          return 10;
-        }
-        return 10;
-      case CodingType.contest:
-        if (value != null) {
-          // Points based on rank (1-10: 100, 11-100: 80, 101-1000: 60, 1000+: 40)
-          if (value <= 10) return 100;
-          if (value <= 100) return 80;
-          if (value <= 1000) return 60;
-          return 40;
-        }
-        return 40;
-      case CodingType.highValueProblem:
-        // Points based on difficulty
-        return 30; // Fixed points for notable problems
-    }
-  }
-
-  static Future<Map<String, int>> getStats(String userId) async {
-    final activities = await getCodingActivities(userId);
-    
-    int totalActivities = activities.length;
-    int approvedActivities = activities.where((a) => a.status == CodingStatus.approved).length;
-    int pendingActivities = activities.where((a) => a.status == CodingStatus.pending).length;
-    int totalScore = await getTotalScore(userId);
-    
-    return {
-      'total': totalActivities,
-      'approved': approvedActivities,
-      'pending': pendingActivities,
-      'score': totalScore,
-    };
   }
 }

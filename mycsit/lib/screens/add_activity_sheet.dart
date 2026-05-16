@@ -1,11 +1,13 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_picker/file_picker.dart';
-import 'dart:io';
-import '../providers/mock_auth_provider.dart';
+import '../core/theme/app_theme.dart';
+import '../core/components/image_preview_gallery.dart';
 import '../data/models/activity_model.dart';
 import '../data/repositories/activity_repository.dart';
-import '../core/components/image_preview_gallery.dart';
+import '../providers/auth_provider.dart';
+import '../providers/supabase_providers.dart';
 
 class AddActivitySheet extends ConsumerStatefulWidget {
   const AddActivitySheet({super.key});
@@ -23,7 +25,7 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
   List<File> _selectedFiles = [];
   bool _isLoading = false;
 
-  final List<ActivityType> _activityTypes = [
+  static const _activityTypes = [
     ActivityType.hackathon,
     ActivityType.certification,
     ActivityType.research,
@@ -41,54 +43,86 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
 
   @override
   Widget build(BuildContext context) {
-    final user = ref.watch(mockCurrentUserProvider);
-    
-    if (user == null) {
-      return const SizedBox.shrink();
-    }
+    final uid = ref.watch(currentUidProvider);
+    if (uid == null) return const SizedBox.shrink();
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.8,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+      height: MediaQuery.of(context).size.height * 0.85,
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(AppTheme.radiusLg),
+          topRight: Radius.circular(AppTheme.radiusLg),
         ),
       ),
       child: Column(
         children: [
+          _buildHandle(),
           _buildHeader(),
-          Expanded(
-            child: _buildCurrentStep(),
-          ),
-          _buildNavigationButtons(user.id),
+          _buildStepIndicator(),
+          Expanded(child: _buildCurrentStep()),
+          _buildNavigationButtons(uid),
         ],
       ),
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHandle() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.grey, width: 0.2)),
+      margin: const EdgeInsets.only(top: AppTheme.spacingSm),
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: AppTheme.border,
+        borderRadius: BorderRadius.circular(AppTheme.radiusFull),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: AppTheme.spacingMd, vertical: AppTheme.spacingSm),
       child: Row(
         children: [
+          Expanded(
+            child: Text(
+              'Add Activity',
+              style: Theme.of(context)
+                  .textTheme
+                  .titleLarge
+                  ?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
           ),
-          const SizedBox(width: 16),
-          Text(
-            'Add Activity - Step ${_currentStep + 1}/3',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildStepIndicator() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppTheme.spacingMd),
+      child: Row(
+        children: List.generate(3, (i) {
+          final isActive = i == _currentStep;
+          final isDone = i < _currentStep;
+          return Expanded(
+            child: Container(
+              margin: EdgeInsets.only(right: i < 2 ? AppTheme.spacingXs : 0),
+              height: 4,
+              decoration: BoxDecoration(
+                color: isDone || isActive
+                    ? AppTheme.primaryAccent
+                    : AppTheme.border,
+                borderRadius: BorderRadius.circular(AppTheme.radiusFull),
+              ),
+            ),
+          );
+        }),
       ),
     );
   }
@@ -108,55 +142,64 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
 
   Widget _buildStep1() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'What are you adding?',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          Text(
+            'What type of activity?',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppTheme.spacingMd),
           Expanded(
             child: GridView.count(
               crossAxisCount: 2,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.2,
+              crossAxisSpacing: AppTheme.spacingSm,
+              mainAxisSpacing: AppTheme.spacingSm,
+              childAspectRatio: 1.3,
               children: _activityTypes.map((type) {
                 final isSelected = _selectedType == type;
                 return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedType = type;
-                    });
-                  },
-                  child: Container(
+                  onTap: () => setState(() => _selectedType = type),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
                     decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppTheme.primaryAccent.withOpacity(0.1)
+                          : AppTheme.background,
                       border: Border.all(
-                        color: isSelected ? const Color(0xFFFF6B35) : Colors.grey,
+                        color: isSelected
+                            ? AppTheme.primaryAccent
+                            : AppTheme.border,
                         width: isSelected ? 2 : 1,
                       ),
-                      borderRadius: BorderRadius.circular(12),
-                      color: isSelected ? const Color(0xFFFF6B35).withOpacity(0.1) : Colors.white,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Text(
-                          _getActivityEmoji(type),
-                          style: const TextStyle(fontSize: 32),
+                        Icon(
+                          _typeIcon(type),
+                          color: isSelected
+                              ? AppTheme.primaryAccent
+                              : AppTheme.textMuted,
+                          size: 28,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppTheme.spacingXs),
                         Text(
-                          _getActivityTitle(type),
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isSelected ? const Color(0xFFFF6B35) : Colors.black,
-                          ),
+                          _typeName(type),
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: isSelected
+                                    ? AppTheme.primaryAccent
+                                    : AppTheme.textPrimary,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -172,58 +215,55 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
   }
 
   Widget _buildStep2() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Activity Details',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: AppTheme.spacingMd),
           TextField(
             controller: _titleController,
-            onChanged: (value) => setState(() {}),
-            decoration: const InputDecoration(
-              labelText: 'Title',
-              border: OutlineInputBorder(),
-            ),
+            onChanged: (_) => setState(() {}),
+            decoration: const InputDecoration(labelText: 'Title *'),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppTheme.spacingMd),
           GestureDetector(
             onTap: _selectDate,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(8),
-              ),
+            child: InputDecorator(
+              decoration: const InputDecoration(labelText: 'Date *'),
               child: Row(
                 children: [
-                  const Icon(Icons.calendar_today),
-                  const SizedBox(width: 12),
+                  const Icon(Icons.calendar_today,
+                      size: 18, color: AppTheme.textMuted),
+                  const SizedBox(width: AppTheme.spacingSm),
                   Text(
                     _selectedDate != null
                         ? '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}'
-                        : 'Select Date',
+                        : 'Select date',
+                    style: _selectedDate == null
+                        ? Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: AppTheme.textMuted)
+                        : null,
                   ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: AppTheme.spacingMd),
           TextField(
             controller: _descriptionController,
-            onChanged: (value) => setState(() {}),
             maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Description',
-              border: OutlineInputBorder(),
-            ),
+            decoration:
+                const InputDecoration(labelText: 'Description (optional)'),
           ),
         ],
       ),
@@ -232,26 +272,45 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
 
   Widget _buildStep3() {
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Upload Proof',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-            ),
+          Row(
+            children: [
+              Text(
+                'Upload Proof',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: AppTheme.spacingSm),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: AppTheme.spacingXs, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppTheme.textMuted.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                ),
+                child: Text(
+                  'optional',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: AppTheme.textMuted),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 24),
-          ImagePreviewGallery(
-            files: _selectedFiles,
-            onAddMore: _pickFiles,
-            onRemove: (index) {
-              setState(() {
-                _selectedFiles.removeAt(index);
-              });
-            },
+          const SizedBox(height: AppTheme.spacingMd),
+          Expanded(
+            child: ImagePreviewGallery(
+              files: _selectedFiles,
+              onAddMore: _pickFiles,
+              onRemove: (index) =>
+                  setState(() => _selectedFiles.removeAt(index)),
+            ),
           ),
         ],
       ),
@@ -260,33 +319,37 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
 
   Widget _buildNavigationButtons(String userId) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: const BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey, width: 0.2)),
+      padding: const EdgeInsets.all(AppTheme.spacingMd),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppTheme.border)),
       ),
       child: Row(
         children: [
-          if (_currentStep > 0)
+          if (_currentStep > 0) ...[
             Expanded(
               child: OutlinedButton(
-                onPressed: () {
-                  setState(() {
-                    _currentStep--;
-                  });
-                },
-                child: const Text('Previous'),
+                onPressed: () => setState(() => _currentStep--),
+                child: const Text('Back'),
               ),
             ),
-          if (_currentStep > 0) const SizedBox(width: 16),
+            const SizedBox(width: AppTheme.spacingMd),
+          ],
           Expanded(
             child: ElevatedButton(
-              onPressed: _canProceed() ? () => _currentStep < 2 ? _nextStep() : _submitActivity(userId) : null,
+              onPressed:
+                  _canProceed() ? () => _onNext(userId) : null,
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6B35),
+                backgroundColor: AppTheme.primaryAccent,
                 foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                    vertical: AppTheme.spacingMd),
               ),
               child: _isLoading
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : Text(_currentStep < 2 ? 'Next' : 'Submit'),
             ),
           ),
@@ -296,84 +359,35 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
   }
 
   bool _canProceed() {
+    if (_isLoading) return false;
     switch (_currentStep) {
       case 0:
         return _selectedType != null;
       case 1:
-        return _titleController.text.isNotEmpty && _selectedDate != null;
+        return _titleController.text.trim().isNotEmpty && _selectedDate != null;
       case 2:
-        return _selectedFiles.isNotEmpty;
+        return true; // proof is optional
       default:
         return false;
     }
   }
 
-  void _nextStep() {
-    setState(() {
-      _currentStep++;
-    });
-  }
-
-  Future<void> _submitActivity(String userId) async {
-    if (_selectedType == null || _selectedDate == null || _selectedFiles.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Upload proofs
-      final proofUrls = await ActivityRepository.uploadProofs(_selectedFiles, userId, 'temp');
-
-      // Create activity
-      final activity = ActivityModel(
-        userId: userId,
-        type: _selectedType!,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        date: _selectedDate!,
-        proofUrls: proofUrls,
-      );
-
-      // Save to database
-      await ActivityRepository.addActivity(activity);
-
-      // Show success message
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activity added successfully!')),
-        );
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+  void _onNext(String userId) {
+    if (_currentStep < 2) {
+      setState(() => _currentStep++);
+    } else {
+      _submitActivity(userId);
     }
   }
 
   Future<void> _selectDate() async {
-    final DateTime? picked = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
+      initialDate: _selectedDate ?? DateTime.now(),
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
     );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
-    }
+    if (picked != null) setState(() => _selectedDate = picked);
   }
 
   Future<void> _pickFiles() async {
@@ -383,38 +397,92 @@ class _AddActivitySheetState extends ConsumerState<AddActivitySheet> {
         allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
         allowMultiple: true,
       );
-      
       if (result != null && result.files.isNotEmpty) {
-        setState(() {
-          _selectedFiles.addAll(result.files.map((e) => File(e.path!)));
-        });
+        setState(
+            () => _selectedFiles.addAll(result.files.map((e) => File(e.path!))));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking file: $e')),
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error picking file: $e')));
+      }
+    }
+  }
+
+  Future<void> _submitActivity(String userId) async {
+    setState(() => _isLoading = true);
+    try {
+      List<String> proofUrls = [];
+      String? proofUrl;
+
+      if (_selectedFiles.isNotEmpty) {
+        proofUrls =
+            await ActivityRepository.uploadProofs(_selectedFiles, userId, 'new');
+        if (proofUrls.isNotEmpty) proofUrl = proofUrls.first;
+      }
+
+      final activity = ActivityModel(
+        userId: userId,
+        type: _selectedType!,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        date: _selectedDate!,
+        proofUrl: proofUrl,
+        proofUrls: proofUrls.length > 1 ? proofUrls.sublist(1) : null,
       );
+
+      await ActivityRepository.addActivity(activity);
+      ref.invalidate(activitiesProvider(userId));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Activity submitted for approval.'),
+              backgroundColor: AppTheme.success),
+        );
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _getActivityEmoji(ActivityType type) {
+  IconData _typeIcon(ActivityType type) {
     switch (type) {
-      case ActivityType.hackathon: return '🏆';
-      case ActivityType.certification: return '📜';
-      case ActivityType.research: return '🔬';
-      case ActivityType.project: return '💻';
-      case ActivityType.internship: return '💼';
-      case ActivityType.achievement: return '🎖';
+      case ActivityType.hackathon:
+        return Icons.emoji_events;
+      case ActivityType.certification:
+        return Icons.workspace_premium;
+      case ActivityType.research:
+        return Icons.science;
+      case ActivityType.project:
+        return Icons.code;
+      case ActivityType.internship:
+        return Icons.work_outline;
+      case ActivityType.achievement:
+        return Icons.military_tech;
     }
   }
 
-  String _getActivityTitle(ActivityType type) {
+  String _typeName(ActivityType type) {
     switch (type) {
-      case ActivityType.hackathon: return 'Hackathon';
-      case ActivityType.certification: return 'Certification';
-      case ActivityType.research: return 'Research';
-      case ActivityType.project: return 'Project';
-      case ActivityType.internship: return 'Internship';
-      case ActivityType.achievement: return 'Achievement';
+      case ActivityType.hackathon:
+        return 'Hackathon';
+      case ActivityType.certification:
+        return 'Certification';
+      case ActivityType.research:
+        return 'Research';
+      case ActivityType.project:
+        return 'Project';
+      case ActivityType.internship:
+        return 'Internship';
+      case ActivityType.achievement:
+        return 'Achievement';
     }
   }
 }
